@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lekter The Game</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Lekter The Game</div>
+  </header>
+
+  <main class="layout">
+    <section class="stage">
+      <canvas id="board" width="1280" height="720"></canvas>
+      <div class="hint" id="hint"></div>
+    </section>
+
+    <aside class="panel">
+      <!-- MAIN MENU -->
+      <div id="menuPanel">
+        <h2>Main Menu</h2>
+        <div class="block">
+          <div class="row">
+            <button id="btnMap">Map the board</button>
+            <button id="btnPlay">Play!</button>
+          </div>
+          <div class="small" id="menuStatus"></div>
+        </div>
+
+        <div class="block">
+          <label>Players (2–6)</label>
+          <div class="small">Fixed roster. Pick who’s in the game.</div>
+          <div id="playerPick" class="playerPick"></div>
+          <div class="small">Starting cash: $100. Default die: d20.</div>
+        </div>
+      </div>
+
+      <!-- PLAY PANEL -->
+      <div id="playPanel" class="hidden">
+        <h2>Play</h2>
+
+        <div class="block">
+          <label>Turn</label>
+          <div id="turnInfo" class="mono"></div>
+          <div class="row">
+            <button id="btnRoll" disabled>ROLL d20</button>
+            <button id="btnDecision" disabled>Decision Menu</button>
+          </div>
+          <div class="row">
+            <button id="btnEndTurn" disabled>End Turn</button>
+            <button id="btnBackMenu" class="danger">Back to Menu</button>
+          </div>
+        </div>
+
+        <div class="block">
+          <label>Log</label>
+          <div id="log" class="log"></div>
+        </div>
+
+        <div class="block">
+          <label>Players</label>
+          <div id="playersStatus" class="playersStatus"></div>
+        </div>
+      </div>
+
+      <!-- MAP PANEL -->
+      <div id="mapPanel" class="hidden">
+        <h2>Map the board</h2>
+        <div class="block">
+          <div class="mono">Click spaces in order: <span id="mapNext">s0</span></div>
+          <div class="small">Click the exact spot where a chip should sit for each space.</div>
+          <div class="row">
+            <button id="btnUndo">Undo</button>
+            <button id="btnClear" class="danger">Clear</button>
+            <button id="btnBackMenu2" class="danger">Back to Menu</button>
+          </div>
+        </div>
+
+        <div class="block">
+          <label>Coords (debug)</label>
+          <textarea id="coordsOut" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Modal -->
+  <div id="modalBackdrop" class="backdrop hidden">
+    <div class="modal">
+      <div class="modalTitle" id="modalTitle"></div>
+      <div class="modalBody" id="modalBody"></div>
+      <div class="modalActions" id="modalActions"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
