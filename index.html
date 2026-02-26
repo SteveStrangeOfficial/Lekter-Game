@@ -13,18 +13,19 @@
 
   <main class="layout">
     <section class="stage">
-  <canvas id="board" width="1280" height="720"></canvas>
+      <canvas id="board" width="1280" height="720"></canvas>
 
-  <div id="infoCard" class="infoCard hidden">
-    <div class="infoTitle" id="infoTitle"></div>
-    <div class="infoBody" id="infoBody"></div>
-    <div class="infoActions">
-      <button id="infoOk">OK</button>
-    </div>
-  </div>
+      <!-- Instruction card overlay -->
+      <div id="infoCard" class="infoCard hidden">
+        <div class="infoTitle" id="infoTitle"></div>
+        <div class="infoBody" id="infoBody"></div>
+        <div class="infoActions">
+          <button id="infoOk">OK</button>
+        </div>
+      </div>
 
-  <div class="hint" id="hint"></div>
-</section>
+      <div class="hint" id="hint"></div>
+    </section>
 
     <aside class="panel">
       <!-- MAIN MENU -->
@@ -96,11 +97,22 @@
   </main>
 
   <!-- Modal -->
- <div id="modalBackdrop" class="backdrop" style="display:none">
+  <div id="modalBackdrop" class="backdrop" style="display:none">
     <div class="modal">
       <div class="modalTitle" id="modalTitle"></div>
       <div class="modalBody" id="modalBody"></div>
       <div class="modalActions" id="modalActions"></div>
+    </div>
+  </div>
+
+  <!-- Card Image Popup -->
+  <div id="cardBackdrop" class="cardBackdrop" style="display:none">
+    <div class="cardModal">
+      <button id="cardClose" class="cardClose">Close</button>
+      <img id="cardImg" class="cardImg" alt="Card" />
+      <div class="small" style="margin-top:8px;color:#9fb0c8">
+        Put images at: <span class="mono">assets/cards/1.png</span> ... <span class="mono">18.png</span>
+      </div>
     </div>
   </div>
 
