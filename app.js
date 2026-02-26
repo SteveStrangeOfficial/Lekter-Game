@@ -10,6 +10,9 @@
   const START_CASH = 100;
   const WIN_CASH = 200;
 
+  // Debt rules
+  const LOSE_DEBT = -200; // -$200 or less => eliminated
+
   // Camera follow behavior (no zoom-to-space)
   const FOLLOW_SCALE = 2.2;
 
@@ -185,7 +188,7 @@
   boardImg.onerror = () => { boardLoaded = false; setHint("Could not load assets/board.png"); };
   boardImg.src = BOARD_IMAGE_PATH;
 
-  // Resize canvas to its CSS size so circles stay circles
+  // Resize canvas
   function resizeCanvasToDisplaySize(){
     const rect = canvas.getBoundingClientRect();
     const w = Math.max(1, Math.floor(rect.width));
@@ -304,19 +307,25 @@
     "You Took Too Much"
   ];
 
-  // Movement graph
+  // ----------------------------
+  // Movement (NO FORK)
+  // Rules:
+  // - Normal movement is clockwise.
+  // - CCW happens ONLY on The Russians (choice) and Took Too Much (forced CCW).
+  // - s0–s3 are ONLY reachable when you are at s0 (start/teleport to s0).
+  //   The main loop is s4..s36, looping back to s4.
+  // ----------------------------
   function nextCW(pos){
-    if(pos === 36) return 4;
-    if(pos === 4) return 5;
-    return (pos + 1) % SPACE_COUNT;
+    if(pos < 4) return pos + 1;     // s0->s1->s2->s3->s4
+    if(pos === 36) return 4;        // loop back to s4
+    return pos + 1;                 // s4..s35 -> +1
   }
   function prevCCW(pos){
-    if(pos === 4) return 36;
-    if(pos === 0) return 3;
-    return pos - 1;
-  }
-  function isForkCrossCW(from, to){
-    return from === 3 && to === 4;
+    if(pos === 4) return 36;        // loop back
+    if(pos > 4) return pos - 1;     // s36..s5 -> -1
+    // For s0-s3, keep simple backwards along that branch
+    if(pos === 0) return 0;
+    return pos - 1;                 // s3->s2->s1->s0
   }
 
   // Cards (images: assets/cards/1.png ... assets/cards/18.png)
@@ -419,28 +428,86 @@
   function currentPlayer(){ return state.game.players[state.game.turn]; }
   function hasBedroom(p, key){ return p.bedroom.some(c => c.key === key); }
 
+  function tryEliminateIfInDebt(p, reason){
+    if(!state.game || state.phase === Phase.GameOver) return;
+    if(p.cash <= LOSE_DEBT){
+      eliminatePlayer(p.id, reason ?? "Debt");
+    }
+  }
+
+  function eliminatePlayer(playerId, reason){
+    const g = state.game;
+    if(!g || state.phase === Phase.GameOver) return;
+
+    const idx = g.players.findIndex(pl => pl.id === playerId);
+    if(idx === -1) return;
+
+    const wasCurrent = (idx === g.turn);
+    const eliminated = g.players[idx];
+
+    log(`${eliminated.name} is eliminated (${reason}). Cash: $${eliminated.cash}.`);
+
+    // Adjust turn pointer before removal
+    if(idx < g.turn) g.turn -= 1;
+
+    g.players.splice(idx, 1);
+
+    if(g.players.length === 1){
+      const winner = g.players[0];
+      state.phase = Phase.GameOver;
+      openModal({
+        title:"GAME OVER",
+        body:`${winner.name} wins! (${eliminated.name} eliminated at $${eliminated.cash}.)`,
+        actions:[{label:"OK"}]
+      });
+      log(`${winner.name} WINS!`);
+      refreshPlayUI();
+      return;
+    }
+
+    // If current player got removed, the next player in line should go now.
+    if(wasCurrent){
+      if(g.turn >= g.players.length) g.turn = 0;
+      state.phase = Phase.StartTurn;
+      refreshPlayUI();
+      openModal({
+        title:"PLAYER ELIMINATED",
+        body:`${eliminated.name} is out (${reason}). Game continues.`,
+        actions:[{label:"OK"}]
+      });
+      startTurn();
+      return;
+    }
+
+    // If someone else got removed, game continues normally.
+    if(g.turn >= g.players.length) g.turn = 0;
+    refreshPlayUI();
+  }
+
   function bankCollect(p, amount, reason){
     let amt = amount;
     if(hasBedroom(p, "double_bank")) amt *= 2;
     p.cash += amt;
     log(`${p.name} collects $${amt}${reason ? " ("+reason+")" : ""}.`);
     checkWinImmediate(p);
+    // collecting can’t worsen debt, but keep it consistent
+    tryEliminateIfInDebt(p, "Debt");
     refreshPlayUI();
   }
 
   function bankPay(p, amount, reason){
-    const amt = Math.min(p.cash, amount);
-    p.cash -= amt;
-    log(`${p.name} pays $${amt}${reason ? " ("+reason+")" : ""}.`);
+    p.cash -= amount; // can go negative
+    log(`${p.name} pays $${amount}${reason ? " ("+reason+")" : ""}.`);
+    tryEliminateIfInDebt(p, reason ?? "Debt");
     refreshPlayUI();
   }
 
   function payPlayer(from, to, amount, reason){
-    const amt = Math.min(from.cash, amount);
-    from.cash -= amt;
-    to.cash += amt;
-    log(`${from.name} pays ${to.name} $${amt}${reason ? " ("+reason+")" : ""}.`);
+    from.cash -= amount; // can go negative
+    to.cash += amount;
+    log(`${from.name} pays ${to.name} $${amount}${reason ? " ("+reason+")" : ""}.`);
     checkWinImmediate(to);
+    tryEliminateIfInDebt(from, reason ?? "Debt");
     refreshPlayUI();
   }
 
@@ -460,22 +527,10 @@
 
   function rollD20(){ return 1 + Math.floor(Math.random() * 20); }
 
-  // Fork prompt (only when crossing s3->s4 clockwise)
-  async function chooseForkIfNeeded(){
-    return new Promise(resolve => {
-      openModal({
-        title:"Fork at First of the Month (s4)",
-        body:"You are passing First of the Month from the clockwise direction.\nChoose your path.",
-        actions:[
-          { label:"Go UP (toward Living Room)", onClick: () => resolve("up") },
-          { label:"Keep going (clockwise)", onClick: () => resolve("straight") },
-        ]
-      });
-    });
-  }
-
+  // $10 pass bonus ONLY if player holds the Bedroom card.
+  // Trigger any time a move step ENTERS s4 (landing counts).
   function applyPassS4BonusIfCrossing(p, from, to){
-    if(from === 3 && to === 4 && hasBedroom(p, "pass_s4_plus10")){
+    if(to === 4 && from !== 4 && hasBedroom(p, "pass_s4_plus10")){
       bankCollect(p, 10, "Pass First of the Month");
     }
   }
@@ -487,31 +542,15 @@
     const path = [];
 
     for(let i=0;i<steps;i++){
-      let next = (dir === "cw") ? nextCW(pos) : prevCCW(pos);
+      const next = (dir === "cw") ? nextCW(pos) : prevCCW(pos);
 
-      // fork exists only on CW crossing 3->4
-      if(dir === "cw" && isForkCrossCW(pos, next)){
-        applyPassS4BonusIfCrossing(p, pos, next);
-        pos = 4;
-        path.push(pos);
-
-        const choice = await chooseForkIfNeeded();
-        p._forkMode = choice;
-        continue;
-      }
-
-      if(dir === "cw" && pos === 4 && p._forkMode === "up"){
-        next = 3;
-        p._forkMode = null;
-      } else if(dir === "cw" && pos === 4 && p._forkMode === "straight"){
-        p._forkMode = null;
-      }
+      // Apply pass bonus when entering s4 (only if card held)
+      applyPassS4BonusIfCrossing(p, pos, next);
 
       pos = next;
       path.push(pos);
     }
 
-    p._forkMode = null;
     return path;
   }
 
@@ -715,6 +754,7 @@
       for(const p of g.players){
         if(p.id === owner.id) continue;
         payPlayer(p, owner, 10, "Goat Tax");
+        if(state.phase === Phase.GameOver) return;
       }
       return;
     }
@@ -1003,6 +1043,7 @@
 
     await showInfo("You Blew It All", "All money goes back to the bank.\nAll Bedroom resources go to Kalif's stash.");
     log(`${p.name} BLEW IT ALL. Money to bank. Resources to Kalif's stash.`);
+
     p.cash = 0;
 
     while(p.bedroom.length){
@@ -1246,7 +1287,7 @@
       case 1: return "Collect $5 from the bank.";
       case 2: return "Transport to s20.";
       case 3: return "Lose a turn.";
-      case 4: return "Win check: if cash in hand >= $200 you win.\nFork choice applies when passing s4 from s3 clockwise.";
+      case 4: return "Win check: if cash in hand >= $200 you win.";
       case 5: return "Choose a player. Both roll d20. Highest wins $20 from the bank.";
       case 6:
       case 22: return "Roll d20.\n1-9: lose a turn\n10-20: steal 1 Bedroom resource from another player.";
@@ -1290,6 +1331,10 @@
     state.phase = Phase.StartTurn;
     const p = currentPlayer();
     p.usedPlus1ThisTurn = false;
+
+    // If a player starts their turn already at/below lose threshold, eliminate them immediately.
+    tryEliminateIfInDebt(p, "Debt");
+    if(state.phase === Phase.GameOver) return;
 
     log(`Turn: ${p.name}`);
 
@@ -1349,7 +1394,7 @@
 
   function endTurnInternal(skipExtraQueue){
     const g = state.game;
-    if(!g) return;
+    if(!g || state.phase === Phase.GameOver) return;
 
     const p = currentPlayer();
 
@@ -1400,7 +1445,6 @@
         oneHit: [],
         usedPlus1ThisTurn: false,
         ax: p0.x, ay: p0.y,
-        _forkMode: null,
       };
     });
 
