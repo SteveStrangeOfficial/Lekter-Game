@@ -1,3 +1,4 @@
+// app.js
 (() => {
   const BOARD_IMAGE_PATH = "assets/board.png";
   const SPACE_COUNT = 37;
@@ -9,8 +10,8 @@
   const START_CASH = 100;
   const WIN_CASH = 200;
 
-  const ZOOM_SCALE = 2.2;
-  const ZOOM_MS = 4000; // was 6000
+  // Camera follow behavior (no more zoom-to-space)
+  const FOLLOW_SCALE = 2.2;
 
   const el = (id) => document.getElementById(id);
 
@@ -55,6 +56,11 @@
   const infoBody = el("infoBody");
   const infoOk = el("infoOk");
 
+  // Card image popup
+  const cardBackdrop = el("cardBackdrop");
+  const cardImg = el("cardImg");
+  const cardClose = el("cardClose");
+
   function setHint(t){ if (hint) hint.textContent = t; }
 
   function log(line){
@@ -66,7 +72,7 @@
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  // Modal uses inline display so it can’t soft-lock
+  // Modal
   function closeModal(){
     modalTitle.textContent = "";
     modalBody.textContent = "";
@@ -96,10 +102,33 @@
     if (e.target === modalBackdrop) closeModal();
   });
 
+  // Card popup
+  function closeCard(){
+    if(!cardBackdrop) return;
+    cardImg.src = "";
+    cardBackdrop.style.display = "none";
+  }
+
+  function openCardImage(cardNumber){
+    if(!cardBackdrop) return;
+    cardImg.src = `assets/cards/${cardNumber}.png`;
+    cardBackdrop.style.display = "flex";
+  }
+
+  if(cardBackdrop){
+    cardBackdrop.addEventListener("click", (e) => {
+      if(e.target === cardBackdrop) closeCard();
+    });
+  }
+  if(cardClose){
+    cardClose.addEventListener("click", () => closeCard());
+  }
+
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       closeModal();
       hideInfo();
+      closeCard();
     }
   });
 
@@ -164,7 +193,7 @@
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      // also reset camera to center
+      // reset camera to center
       cam.x = canvas.width * 0.5;
       cam.y = canvas.height * 0.5;
       cam.targetX = cam.x;
@@ -207,7 +236,7 @@
     return { x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r };
   }
 
-  // Camera / zoom
+  // Camera
   let cam = {
     scale: 1,
     x: canvas.width * 0.5,
@@ -215,7 +244,6 @@
     targetScale: 1,
     targetX: canvas.width * 0.5,
     targetY: canvas.height * 0.5,
-    zoomUntil: 0
   };
 
   function nowMs(){ return performance.now(); }
@@ -226,17 +254,11 @@
     cam.targetScale = scale;
   }
 
-  function zoomToSpace(spaceIndex, durationMs){
-    const pt = getSpaceXY(spaceIndex);
-    setCameraTarget(pt.x, pt.y, ZOOM_SCALE);
-    cam.zoomUntil = nowMs() + durationMs;
+  function followPlayer(player){
+    setCameraTarget(player.ax, player.ay, FOLLOW_SCALE);
   }
 
   function updateCamera(dt){
-    if(cam.zoomUntil && nowMs() >= cam.zoomUntil){
-      cam.zoomUntil = 0;
-      setCameraTarget(canvas.width * 0.5, canvas.height * 0.5, 1);
-    }
     const k = 8;
     cam.scale += (cam.targetScale - cam.scale) * Math.min(1, dt * k);
     cam.x += (cam.targetX - cam.x) * Math.min(1, dt * k);
@@ -299,67 +321,73 @@
     return from === 3 && to === 4;
   }
 
-  // Decks
+  // ----------------------------
+  // Cards with image numbers 1–18
+  // Put images here: assets/cards/1.png ... assets/cards/18.png
+  // ----------------------------
+
+  const ONE_HIT_WONDERS = [
+    { key:"mic_drop", title:"MIC DROP", text:"MIC DROP\n\nSHUT DOWN ANOTHER PLAYER'S TURN ON THE SPOT!\nMAKE THEM LOSE A TURN", kind:"mic_drop", img:1 },
+    { key:"goat_tax", title:"GOAT TAX", text:"GOAT TAX\n\nDEMAND $10 FROM EVERY PLAYER", kind:"goat_tax", img:2 },
+    { key:"encore", title:"ENCORE!", text:"ENCORE!\n\nTAKE ANOTHER TURN IMMEDIATELY", kind:"encore", img:3 },
+    { key:"swap_666", title:"666 SWAP", text:"666 SWAP\n\nSWAP SPACES WITH ANY PLAYER", kind:"swap", img:4 },
+    { key:"i_want_it_all", title:"I WANT IT ALL", text:"I WANT IT ALL\n\nCOLLECT $30 FROM THE BANK RIGHT NOW.", kind:"bank_collect", amount:30, img:5 },
+  ];
+
   const BEDROOM_SHOP = [
     { key:"pass_s4_plus10", title:"MEECH APPRECIATES YOUR 'BUSINESS.'",
-      text:"EVERY TIME YOU PASS THE \"FIRST OF THE MONTH\" COLLECT $10.\nMEECH APPRECIATES YOUR 'BUSINESS.'" },
+      text:"EVERY TIME YOU PASS THE \"FIRST OF THE MONTH\" COLLECT $10.\nMEECH APPRECIATES YOUR 'BUSINESS.'", img:6 },
     { key:"land_s20_plus5", title:"MEECH LEFT THE SAFE OPEN...",
-      text:"MEECH LEFT THE SAFE OPEN...\n\nAS LONG AS YOU HAVE THIS CARD\nEVERY TIME YOU LAND ON\nMEECH'S BEDROOM SHOP,\nTAKE $5 FROM HIS SAFE" },
+      text:"MEECH LEFT THE SAFE OPEN...\n\nAS LONG AS YOU HAVE THIS CARD\nEVERY TIME YOU LAND ON\nMEECH'S BEDROOM SHOP,\nTAKE $5 FROM HIS SAFE", img:7 },
     { key:"swap_any_bedroom", title:"HEY BUDDY.....",
-      text:"HEY BUDDY.....\n\nSWAP SPOTS WITH ANY PLAYER ON THE BOARD.\nMEECH MAKES THINGS HAPPEN\nWHEN YOU NEED IT MOST." },
+      text:"HEY BUDDY.....\n\nSWAP SPOTS WITH ANY PLAYER ON THE BOARD.\nMEECH MAKES THINGS HAPPEN\nWHEN YOU NEED IT MOST.", img:8 },
     { key:"virginia_slims", title:"VIRGINIA SLIMS",
-      text:"MEECH BLESSES YOU\nWITH 24 PACKS OF\nVIRGINIA SLIMS.\n\n(THIS CARD DOES NOTHING EXCEPT GIVE YOU IN-GAME LUNG CANCER.)" },
+      text:"MEECH BLESSES YOU\nWITH 24 PACKS OF\nVIRGINIA SLIMS.\n\n(THIS CARD DOES NOTHING EXCEPT GIVE YOU IN-GAME LUNG CANCER.)", img:9 },
     { key:"double_bank", title:"2X MONEY",
-      text:"ANY MONEY YOU RECIEVE IS\n2X\nAS LONG AS YOU HAVE\nTHIS CARD" },
+      text:"ANY MONEY YOU RECIEVE IS\n2X\nAS LONG AS YOU HAVE\nTHIS CARD", img:10 },
     { key:"may_plus1", title:"+1 MOVE",
-      text:"AS LONG AS\nYOU HAVE THIS CARD,\nYOU MAY MOVE\nONE EXTRA SPACE\nPER TURN" },
+      text:"AS LONG AS\nYOU HAVE THIS CARD,\nYOU MAY MOVE\nONE EXTRA SPACE\nPER TURN", img:11 },
   ];
 
   const CLOSET = [
     { title:"YOU HAD YOUR FIRST LESBIAN EXPERIENCE WITH KARA",
       text:"YOU HAD YOUR FIRST LESBIAN EXPERIENCE WITH KARA\n\nROLL 1-9\nYOU HATED IT AND -$5\n(AND ANY RESPECT YOU HAD FOR YOURSELF)\n\nROLL 10-20\nYOU LIKED IT AND +$10\n(BUT YOU LOSE ANY RESPECT YOU HAD FOR YOURSELF)",
-      kind:"roll_bank", rules:[{min:1,max:9,pay:5},{min:10,max:20,collect:10}] },
+      kind:"roll_bank", rules:[{min:1,max:9,pay:5},{min:10,max:20,collect:10}], img:12 },
+
     { title:"MARIA GOT DRUNK AND PASSED OUT NAKED IN YOUR BED",
       text:"MARIA GOT DRUNK AND PASSED OUT NAKED IN YOUR BED\n\nROLL 1-9\nSHE LETS YOU SLIP IT IN AND YOU NUT YOURSELF SWEETLY TO SLEEP\n+$10\n\nROLL 11-20\nYOUR GIRLFRIEND COMES HOME AND CRACKS A BOTTLE OVER YOUR HEAD\n-$10\n\nROLL 10\nYOU GET HER PREGNANT AND WON'T BE HAVING ANY OF THAT DRAMA\n-$100 FOR THE ABORTION",
-      kind:"roll_bank_multi", rules:[{min:1,max:9,collect:10},{min:10,max:10,pay:100},{min:11,max:20,pay:10}] },
-    { title:"CROCKPOT MAGGOTS",
+      kind:"roll_bank_multi", rules:[{min:1,max:9,collect:10},{min:10,max:10,pay:100},{min:11,max:20,pay:10}], img:13 },
+
+    { title:"PICK A PLAYER TO CLEAN THE CROCKPOT FULL OF 3 MONTH OLD SOUP AND MAGGOTS",
       text:"PICK A PLAYER TO CLEAN THE CROCKPOT FULL OF 3 MONTH OLD SOUP AND MAGGOTS\n\nROLL 1-9\nPLAYER -$5\n\nROLL 10-20\nPLAYER -$10",
-      kind:"target_roll_pay_to_drawer", rules:[{min:1,max:9,pay:5},{min:10,max:20,pay:10}] },
-    { title:"PARTH THREW UP AND LEFT FOR INDIA.",
+      kind:"target_roll_pay_to_drawer", rules:[{min:1,max:9,pay:5},{min:10,max:20,pay:10}], img:14 },
+
+    { title:"PARTH THREW UP ON THE FLOOR AND LEFT FOR INDIA.",
       text:"PARTH THREW UP ON THE FLOOR AND LEFT FOR INDIA.\n\nROLL 1-9\nYOU HAVE TO CLEAN IT UP\n-$10\n\nROLL 10-20\nLAY A NEWSPAPER ON IT AND LET HIM TAKE CARE OF IT IN 3 WEEKS\n+$20",
-      kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:20}] },
-    { title:"BEARD'S MOTHER'S BROOM",
+      kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:20}], img:15 },
+
+    { title:"BEARD BROUGHT HIS MOTHERS BROOM TO THE HOUSE",
       text:"BEARD BROUGHT HIS MOTHERS BROOM TO THE HOUSE\n\nROLL 1-9\nYOU UNLEASH THE UNHOLY SPIRIT OF LA LLORONA INTO THE HOUSE\n-$10\n\nROLL 10-20\nYOU SWEEP UP ALL THE ASH FROM THE HOOKAH COALS. PRAY A BLESSING, RETURN THE BROOM AND EVERYTHING IS FINE\n+$20",
-      kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:20}] },
-    { title:"SLIP ON KALIF'S PISS",
+      kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:20}], img:16 },
+
+    { title:"YOU SLIP ON KALIF'S PISS IN THE KITCHEN",
       text:"YOU SLIP ON KALIF'S PISS IN THE KITCHEN\n\nROLL 1-9\nBREAK YOUR ANKLE AND THE PISS SPLASHES IN YOUR MOUTH\n-$20\n\nROLL 10-20\nHE PASSES OUT AND YOU PISS ON HIS PANTS TO MAKE HIM THINK HE PISSED HIMSELF WHILE HE WAS BLACKED OUT BUT REALLY HE'S JUST BEEN MARINATING IN YOUR PISS FOR 6 HRS\n+$20",
-      kind:"roll_bank", rules:[{min:1,max:9,pay:20},{min:10,max:20,collect:20}] },
+      kind:"roll_bank", rules:[{min:1,max:9,pay:20},{min:10,max:20,collect:20}], img:17 },
+
     { title:"STEVE'S MOM DROPS OFF A BAG OF FOOD",
       text:"STEVE'S MOM DROPS OFF A BAG OF FOOD\n\nROLL 1-9\nIT'S CANNED BEETS & EXPIRED MATZAH\n-$10\n\nROLL 10-20\nIT'S A NEW BAG OF OREOS AND 3 BOXES OF THE GOOD MAC AND CHEESE\n+$10",
-      kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:10}] },
+      kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:10}], img:18 },
   ];
 
-  const ONE_HIT_WONDERS = [
-    { key:"mic_drop", title:"MIC DROP",
-      text:"MIC DROP\n\nSHUT DOWN ANOTHER PLAYER'S TURN ON THE SPOT!\nMAKE THEM LOSE A TURN", kind:"mic_drop" },
-    { key:"goat_tax", title:"GOAT TAX",
-      text:"GOAT TAX\n\nDEMAND $10 FROM EVERY PLAYER", kind:"goat_tax" },
-    { key:"encore", title:"ENCORE!",
-      text:"ENCORE!\n\nTAKE ANOTHER TURN IMMEDIATELY", kind:"encore" },
-    { key:"swap_666", title:"666 SWAP",
-      text:"666 SWAP\n\nSWAP SPACES WITH ANY PLAYER", kind:"swap" },
-    { key:"i_want_it_all", title:"I WANT IT ALL",
-      text:"I WANT IT ALL\n\nCOLLECT $30 FROM THE BANK RIGHT NOW.", kind:"bank_collect", amount:30 },
-  ];
-
+  // ----------------------------
   // State
+  // ----------------------------
   const Phase = {
     Menu: "Menu",
     Mapping: "Mapping",
     StartTurn: "StartTurn",
     AfterRoll: "AfterRoll",
     Moving: "Moving",
-    Zooming: "Zooming",
     BeforeResolve: "BeforeResolve",
     Resolving: "Resolving",
     AfterResolve: "AfterResolve",
@@ -373,6 +401,7 @@
     game: null,
   };
 
+  // Randomized deck: draw is random every time
   function makeDeck(cards){
     const d = cards.map(c => ({...c}));
     return {
@@ -385,7 +414,8 @@
       },
       draw(){
         if(!this.cards.length) return null;
-        return this.cards.shift();
+        const idx = Math.floor(Math.random() * this.cards.length);
+        return this.cards.splice(idx, 1)[0];
       },
       putBackAndShuffle(card){
         this.cards.push(card);
@@ -395,7 +425,6 @@
   }
 
   function currentPlayer(){ return state.game.players[state.game.turn]; }
-
   function hasBedroom(p, key){ return p.bedroom.some(c => c.key === key); }
 
   function bankCollect(p, amount, reason){
@@ -438,7 +467,6 @@
   }
 
   // Rolls
-  function rollD6(){ return 1 + Math.floor(Math.random() * 6); }
   function rollD20(){ return 1 + Math.floor(Math.random() * 20); }
 
   // Fork prompt
@@ -459,8 +487,30 @@
     if(from === 3 && to === 4 && hasBedroom(p, "pass_s4_plus10")){
       bankCollect(p, 10, "Pass First of the Month");
     }
-    // mark global passed-s4 for direction unlocking
-    state.game.hasPassedS4 = true;
+  }
+
+  // Direction choice unlock: forced CW until player reaches s4+ once
+  function maybeUnlockDirection(p){
+    if(!p.dirUnlocked && p.pos >= 4){
+      p.dirUnlocked = true;
+      log(`${p.name} has cleared the first 4 spaces. Direction choice unlocked.`);
+    }
+  }
+
+  async function chooseDirectionIfAllowed(p, steps){
+    if(!p.dirUnlocked){
+      return "cw";
+    }
+    return new Promise(resolve => {
+      openModal({
+        title:"Choose direction",
+        body:`Move ${steps} spaces.`,
+        actions:[
+          {label:"Clockwise", onClick:()=>resolve("cw")},
+          {label:"Counterclockwise", onClick:()=>resolve("ccw")}
+        ]
+      });
+    });
   }
 
   // Compute path indices (so we can animate along board smoothly)
@@ -497,7 +547,7 @@
     return path; // list of visited spaces, last is destination
   }
 
-  // Animate along path points with constant speed
+  // Animate along path with camera follow
   function animateAlongPath(player, pathIndices){
     return new Promise(resolve => {
       if(!pathIndices.length){ resolve(); return; }
@@ -507,10 +557,11 @@
       let seg = 0;
       let sx = player.ax, sy = player.ay;
 
-      const speed = 550; // pixels per second, tweak as needed
+      const speed = 550; // pixels per second
 
       function animateSegment(){
         if(seg >= pts.length){
+          maybeUnlockDirection(player);
           resolve();
           return;
         }
@@ -528,6 +579,8 @@
           player.ax = sx + (ex - sx) * u;
           player.ay = sy + (ey - sy) * u;
 
+          followPlayer(player);
+
           if(t >= 1){
             player.ax = ex; player.ay = ey;
             player.pos = target.i;
@@ -541,11 +594,10 @@
         requestAnimationFrame(step);
       }
 
+      followPlayer(player);
       animateSegment();
     });
   }
-
-  function delay(ms){ return new Promise(res => setTimeout(res, ms)); }
 
   async function maybeUsePlus1(){
     const p = currentPlayer();
@@ -566,6 +618,14 @@
 
   function getMicDropWindow(){
     return state.phase === Phase.StartTurn || state.phase === Phase.AfterRoll;
+  }
+
+  function canCurrentPlayerPlayNow(){
+    if(!state.game) return false;
+    const p = currentPlayer();
+    const hasOneHit = p.oneHit.length > 0;
+    const hasBedroomSwap = hasBedroom(p, "swap_any_bedroom");
+    return hasOneHit || hasBedroomSwap;
   }
 
   async function decisionMomentMenu(context){
@@ -650,6 +710,7 @@
     owner.oneHit.splice(handIndex, 1);
     g.oneHitDeck.putBackAndShuffle(card);
 
+    if(card.img) openCardImage(card.img);
     await showInfo(`One Hit Wonder: ${card.title}`, card.text);
 
     if(card.kind === "bank_collect"){
@@ -674,6 +735,8 @@
       owner.ax = pA.x; owner.ay = pA.y;
       const pB = getSpaceXY(target.pos);
       target.ax = pB.x; target.ay = pB.y;
+
+      followPlayer(owner);
 
       log(`${owner.name} swaps positions with ${target.name}.`);
       checkWinImmediate(owner);
@@ -723,25 +786,25 @@
     const pB = getSpaceXY(target.pos);
     target.ax = pB.x; target.ay = pB.y;
 
+    followPlayer(p);
+    maybeUnlockDirection(p);
+    maybeUnlockDirection(target);
+
+    if(hasBedroom(p, "swap_any_bedroom")){
+      const swapCard = p.bedroom.find(c => c.key === "swap_any_bedroom");
+      if(swapCard?.img) openCardImage(swapCard.img);
+    }
+
     await showInfo("Bedroom Swap", "SWAP SPOTS WITH ANY PLAYER ON THE BOARD.");
     log(`${p.name} uses Bedroom Swap to swap with ${target.name}.`);
     checkWinImmediate(p);
     checkWinImmediate(target);
   }
 
-  async function landWithZoomThenResolve(resolveFn){
-    const p = currentPlayer();
-
-    zoomToSpace(p.pos, ZOOM_MS);
-    state.phase = Phase.Zooming;
-    refreshPlayUI();
-
-    await delay(ZOOM_MS);
-
+  async function landThenResolve(resolveFn){
     state.phase = Phase.BeforeResolve;
     refreshPlayUI();
 
-    // If player has playable cards, give a decision moment. If not, skip.
     if (canCurrentPlayerPlayNow()) {
       await decisionMomentMenu("Before resolving this space.");
       if(state.phase === Phase.GameOver) return;
@@ -760,15 +823,6 @@
     }
   }
 
-  // Autoplay rule: if player has no playable cards, start turn with roll immediately
-  function canCurrentPlayerPlayNow(){
-    if(!state.game) return false;
-    const p = currentPlayer();
-    const hasOneHit = p.oneHit.length > 0;
-    const hasBedroomSwap = hasBedroom(p, "swap_any_bedroom");
-    return hasOneHit || hasBedroomSwap;
-  }
-
   async function teleportThenResolve(dest){
     const p = currentPlayer();
     state.phase = Phase.Moving;
@@ -785,7 +839,7 @@
       log(`${p.name} uses +1 Move.`);
     }
 
-    await landWithZoomThenResolve(async () => {
+    await landThenResolve(async () => {
       await resolveSpace(p.pos);
     });
   }
@@ -806,7 +860,7 @@
       log(`${p.name} uses +1 Move.`);
     }
 
-    await landWithZoomThenResolve(async () => {
+    await landThenResolve(async () => {
       await resolveSpace(p.pos);
     });
   }
@@ -861,7 +915,10 @@
 
     const stolen = victim.bedroom.splice(Math.floor(Math.random()*victim.bedroom.length),1)[0];
     p.bedroom.push(stolen);
+
+    if(stolen.img) openCardImage(stolen.img);
     await showInfo("Stolen Resource", stolen.text ?? stolen.title);
+
     log(`${p.name} steals Bedroom resource from ${victim.name}: ${stolen.title}`);
   }
 
@@ -893,11 +950,13 @@
     const opponent = await pickOtherPlayer(p, "Fake Family: choose an opponent.");
     if(!opponent) return;
 
-    await showInfo("Fake Family", "Choose another player.\nBoth go to Living Room.\nBoth roll d20.\nWinner gets $20.");
+    await showInfo("Fake Family", "Choose another player.\nBoth go to s0.\nBoth roll d20.\nWinner gets $20.");
 
     const s0 = getSpaceXY(0);
     p.pos = 0; p.ax = s0.x; p.ay = s0.y;
     opponent.pos = 0; opponent.ax = s0.x + 30; opponent.ay = s0.y;
+
+    followPlayer(p);
 
     const r1 = rollD20();
     const r2 = rollD20();
@@ -918,6 +977,7 @@
     const card = g.closetDeck.draw();
     g.closetDeck.putBackAndShuffle(card);
 
+    if(card.img) openCardImage(card.img);
     await showInfo(`Closet of Shame: ${card.title}`, card.text);
     log(`${p.name} draws CLOSET OF SHAME: ${card.title}`);
 
@@ -969,6 +1029,7 @@
       } else {
         log(`${p.name} loses a resource: ${lost.title}`);
       }
+      if(lost.img) openCardImage(lost.img);
       await showInfo("Lost Resource", lost.text ?? lost.title);
     }
   }
@@ -995,7 +1056,10 @@
     g.bedroomDeck.putBackAndShuffle(card);
 
     p.bedroom.push(card);
+
+    if(card.img) openCardImage(card.img);
     await showInfo(`Bedroom Shop: ${card.title}`, card.text);
+
     log(`${p.name} gains BEDROOM SHOP card: ${card.title}`);
   }
 
@@ -1073,39 +1137,27 @@
 
     const card = g.oneHitDeck.draw();
     if(!card){
+      // rebuild
       g.oneHitDeck = makeDeck(ONE_HIT_WONDERS);
       g.oneHitDeck.shuffle();
-      p.oneHit.push(g.oneHitDeck.draw());
+      const again = g.oneHitDeck.draw();
+      if(again) p.oneHit.push(again);
       await showInfo("One Hit Wonder", "Drew a card.");
       return;
     }
     p.oneHit.push(card);
+    if(card.img) openCardImage(card.img);
     await showInfo(`One Hit Wonder: ${card.title}`, card.text);
     log(`${p.name} draws ONE HIT WONDER: ${card.title}`);
   }
 
   async function russians(){
     const r = rollD20();
-    const g = state.game;
+    const p = currentPlayer();
 
-    // rule: no direction choice until first pass s4
-    if(!g.hasPassedS4){
-      await showInfo("The Russians", `You have not passed First of the Month yet.\nForced CLOCKWISE.\nMove ${r} spaces.`);
-      await doForcedMove(r, "cw");
-      return;
-    }
+    const dir = await chooseDirectionIfAllowed(p, r);
 
-    const dir = await new Promise(resolve => {
-      openModal({
-        title:"The Russians",
-        body:`Roll d20 = ${r}\nChoose direction to move ${r} spaces.`,
-        actions:[
-          {label:"Clockwise", onClick:()=>resolve("cw")},
-          {label:"Counterclockwise", onClick:()=>resolve("ccw")}
-        ]
-      });
-    });
-
+    await showInfo("The Russians", `Roll d20 = ${r}\nMove ${r} spaces ${dir === "cw" ? "clockwise" : "counterclockwise"}.`);
     await doForcedMove(r, dir);
   }
 
@@ -1120,7 +1172,6 @@
     const g = state.game;
     const p = currentPlayer();
 
-    // show space instructions first
     await showInfo(`Space s${spaceIndex}: ${SPACE_TITLES[spaceIndex]}`, spaceInstructionText(spaceIndex));
 
     if(spaceIndex === 4){
@@ -1225,7 +1276,7 @@
       case 1: return "Collect $5 from the bank.";
       case 2: return "Transport to s20.";
       case 3: return "Lose a turn.";
-      case 4: return "Win check: if cash in hand >= $200 you win.\nFork choice applies when passing s4 from s3 clockwise.";
+      case 4: return "Win check: if cash in hand >= $200 you win.\nFork choice applies when passing s4 from s3 clockwise.\nDirection choice unlocks after you reach s4+ at least once.";
       case 5: return "Choose a player. Both roll d20. Highest wins $20 from the bank.";
       case 6:
       case 22: return "Roll d20.\n1-9: lose a turn\n10-20: steal 1 Bedroom resource from another player.";
@@ -1251,7 +1302,7 @@
       case 25: return "Go to nearest occupied space clockwise, then resolve that space.";
       case 26: return "Each player gets $10 from the bank.";
       case 28: return "Draw a One Hit Wonder card (held, single-use).";
-      case 29: return "Roll d20. Move that many spaces.\nAfter first pass of s4, you may choose direction.\nBefore first pass, forced clockwise.";
+      case 29: return "Roll d20. Move that many spaces.\nDirection choice depends on whether you've cleared s0-s3 yet.";
       case 30: return "Transport to s7.";
       case 31: return "Lose $10 to the bank.";
       case 32: return "Roll again.";
@@ -1280,13 +1331,6 @@
     }
 
     refreshPlayUI();
-
-    // rule: if no playable cards, auto-roll immediately
-    if(!canCurrentPlayerPlayNow()){
-      setTimeout(() => {
-        if(state.phase === Phase.StartTurn) doRoll();
-      }, 150);
-    }
   }
 
   async function doRoll(){
@@ -1297,14 +1341,12 @@
 
     state.phase = Phase.AfterRoll;
 
-    // movement uses d6
-    const movement = rollD6();
+    const movement = rollD20();
     g.lastRoll = movement;
 
-    log(`${p.name} rolls d6 for movement: ${movement}`);
+    log(`${p.name} rolls d20 for movement: ${movement}`);
     refreshPlayUI();
 
-    // decision moment after roll only if someone has playable cards
     if (canCurrentPlayerPlayNow()) {
       await decisionMomentMenu("Right after roll (before movement).");
       if(state.phase === Phase.GameOver) return;
@@ -1318,7 +1360,9 @@
     state.phase = Phase.Moving;
     refreshPlayUI();
 
-    const path = await computePath(p.pos, steps, "cw");
+    const dir = await chooseDirectionIfAllowed(p, steps);
+
+    const path = await computePath(p.pos, steps, dir);
     await animateAlongPath(p, path);
 
     const usePlus = await maybeUsePlus1();
@@ -1329,32 +1373,9 @@
       log(`${p.name} uses +1 Move.`);
     }
 
-    zoomToSpace(p.pos, ZOOM_MS);
-    state.phase = Phase.Zooming;
-    refreshPlayUI();
-
-    await delay(ZOOM_MS);
-
-    state.phase = Phase.BeforeResolve;
-    refreshPlayUI();
-
-    if (canCurrentPlayerPlayNow()) {
-      await decisionMomentMenu("Before resolving this space.");
-      if(state.phase === Phase.GameOver) return;
-    }
-
-    state.phase = Phase.Resolving;
-    refreshPlayUI();
-
-    await resolveSpace(p.pos);
-    if(state.phase === Phase.GameOver) return;
-
-    state.phase = Phase.AfterResolve;
-    refreshPlayUI();
-
-    if (canCurrentPlayerPlayNow()) {
-      await decisionMomentMenu("After resolving. You can play cards, then End Turn.");
-    }
+    await landThenResolve(async () => {
+      await resolveSpace(p.pos);
+    });
   }
 
   function endTurnInternal(skipExtraQueue){
@@ -1411,6 +1432,7 @@
         usedPlus1ThisTurn: false,
         ax: p0.x, ay: p0.y,
         _forkMode: null,
+        dirUnlocked: false,
       };
     });
 
@@ -1422,7 +1444,6 @@
       closetDeck: makeDeck(CLOSET),
       oneHitDeck: makeDeck(ONE_HIT_WONDERS),
       kalifStash: [],
-      hasPassedS4: false,
     };
 
     state.game.bedroomDeck.shuffle();
@@ -1431,6 +1452,11 @@
 
     logEl.innerHTML = "";
     log("New game started.");
+
+    // Start camera centered on player 0 chip
+    const p0 = state.game.players[0];
+    followPlayer(p0);
+
     state.phase = Phase.StartTurn;
     showPlay();
     startTurn();
@@ -1520,8 +1546,7 @@
     const g = state.game;
     const p = currentPlayer();
 
-    // update roll button label to d6
-    btnRoll.textContent = "ROLL d6";
+    btnRoll.textContent = "ROLL d20";
 
     turnInfo.textContent =
       `Player: ${p.name}\n` +
@@ -1529,11 +1554,12 @@
       `Cash: $${p.cash}\n` +
       `One Hit Wonders: ${p.oneHit.length}\n` +
       `Bedroom cards: ${p.bedroom.length}\n` +
+      `Direction unlocked: ${p.dirUnlocked ? "YES" : "no"}\n` +
       `Phase: ${state.phase}`;
 
     btnRoll.disabled = !(state.phase === Phase.StartTurn) || state.phase === Phase.GameOver;
     btnEndTurn.disabled = !(state.phase === Phase.AfterResolve || state.phase === Phase.StartTurn) || state.phase === Phase.GameOver;
-    btnDecision.disabled = (state.phase === Phase.Moving || state.phase === Phase.Zooming || state.phase === Phase.Resolving || state.phase === Phase.GameOver);
+    btnDecision.disabled = (state.phase === Phase.Moving || state.phase === Phase.Resolving || state.phase === Phase.GameOver);
 
     playersStatus.innerHTML = "";
     for(const pl of g.players){
@@ -1545,6 +1571,7 @@
         `<div class="name">${pl.name}</div>` +
         `<div class="meta">Cash: $${pl.cash} • Space: s${pl.pos}</div>` +
         `<div class="meta">Lose turn: ${pl.loseTurn ? "YES" : "no"} • Extra turns: ${pl.extraTurnQueued}</div>` +
+        `<div class="meta">Direction unlocked: ${pl.dirUnlocked ? "YES" : "no"}</div>` +
         `<div class="meta">Bedroom: ${bedroomTitles}</div>` +
         `<div class="meta">One Hit: ${oneHitTitles}</div>`;
       playersStatus.appendChild(div);
@@ -1637,6 +1664,7 @@
   btnBackMenu.addEventListener("click", () => {
     state.game = null;
     state.phase = Phase.Menu;
+    closeCard();
     showMenu();
   });
 
@@ -1673,6 +1701,7 @@
   // Init
   closeModal();
   hideInfo();
+  closeCard();
   buildPlayerPick();
   state.phase = Phase.Menu;
   showMenu();
