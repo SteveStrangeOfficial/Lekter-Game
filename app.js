@@ -10,7 +10,7 @@
   const START_CASH = 100;
   const WIN_CASH = 200;
 
-  // Camera follow behavior (no more zoom-to-space)
+  // Camera follow behavior (no zoom-to-space)
   const FOLLOW_SCALE = 2.2;
 
   const el = (id) => document.getElementById(id);
@@ -193,7 +193,6 @@
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      // reset camera to center
       cam.x = canvas.width * 0.5;
       cam.y = canvas.height * 0.5;
       cam.targetX = cam.x;
@@ -228,7 +227,6 @@
 
   function getSpaceXY(i){
     if(haveCoords() && COORDS[i]) return COORDS[i];
-    // fallback circle
     const cx = canvas.width * 0.5;
     const cy = canvas.height * 0.5;
     const r = Math.min(canvas.width, canvas.height) * 0.34;
@@ -265,7 +263,7 @@
     cam.y += (cam.targetY - cam.y) * Math.min(1, dt * k);
   }
 
-  // Spaces list (for title display)
+  // Spaces list
   const SPACE_TITLES = [
     "START / Living Room",
     "Expired peanut butter & matzoh",
@@ -321,11 +319,7 @@
     return from === 3 && to === 4;
   }
 
-  // ----------------------------
-  // Cards with image numbers 1–18
-  // Put images here: assets/cards/1.png ... assets/cards/18.png
-  // ----------------------------
-
+  // Cards (images: assets/cards/1.png ... assets/cards/18.png)
   const ONE_HIT_WONDERS = [
     { key:"mic_drop", title:"MIC DROP", text:"MIC DROP\n\nSHUT DOWN ANOTHER PLAYER'S TURN ON THE SPOT!\nMAKE THEM LOSE A TURN", kind:"mic_drop", img:1 },
     { key:"goat_tax", title:"GOAT TAX", text:"GOAT TAX\n\nDEMAND $10 FROM EVERY PLAYER", kind:"goat_tax", img:2 },
@@ -379,9 +373,7 @@
       kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:10}], img:18 },
   ];
 
-  // ----------------------------
   // State
-  // ----------------------------
   const Phase = {
     Menu: "Menu",
     Mapping: "Mapping",
@@ -401,7 +393,7 @@
     game: null,
   };
 
-  // Randomized deck: draw is random every time
+  // Random draw each time (not just shuffled order)
   function makeDeck(cards){
     const d = cards.map(c => ({...c}));
     return {
@@ -466,10 +458,9 @@
     }
   }
 
-  // Rolls
   function rollD20(){ return 1 + Math.floor(Math.random() * 20); }
 
-  // Fork prompt
+  // Fork prompt (only when crossing s3->s4 clockwise)
   async function chooseForkIfNeeded(){
     return new Promise(resolve => {
       openModal({
@@ -489,31 +480,7 @@
     }
   }
 
-  // Direction choice unlock: forced CW until player reaches s4+ once
-  function maybeUnlockDirection(p){
-    if(!p.dirUnlocked && p.pos >= 4){
-      p.dirUnlocked = true;
-      log(`${p.name} has cleared the first 4 spaces. Direction choice unlocked.`);
-    }
-  }
-
-  async function chooseDirectionIfAllowed(p, steps){
-    if(!p.dirUnlocked){
-      return "cw";
-    }
-    return new Promise(resolve => {
-      openModal({
-        title:"Choose direction",
-        body:`Move ${steps} spaces.`,
-        actions:[
-          {label:"Clockwise", onClick:()=>resolve("cw")},
-          {label:"Counterclockwise", onClick:()=>resolve("ccw")}
-        ]
-      });
-    });
-  }
-
-  // Compute path indices (so we can animate along board smoothly)
+  // Compute path indices
   async function computePath(startPos, steps, dir){
     let pos = startPos;
     const p = currentPlayer();
@@ -522,6 +489,7 @@
     for(let i=0;i<steps;i++){
       let next = (dir === "cw") ? nextCW(pos) : prevCCW(pos);
 
+      // fork exists only on CW crossing 3->4
       if(dir === "cw" && isForkCrossCW(pos, next)){
         applyPassS4BonusIfCrossing(p, pos, next);
         pos = 4;
@@ -544,7 +512,7 @@
     }
 
     p._forkMode = null;
-    return path; // list of visited spaces, last is destination
+    return path;
   }
 
   // Animate along path with camera follow
@@ -557,11 +525,10 @@
       let seg = 0;
       let sx = player.ax, sy = player.ay;
 
-      const speed = 550; // pixels per second
+      const speed = 550;
 
       function animateSegment(){
         if(seg >= pts.length){
-          maybeUnlockDirection(player);
           resolve();
           return;
         }
@@ -574,7 +541,7 @@
 
         function step(){
           const t = (nowMs() - t0) / duration;
-          const u = t >= 1 ? 1 : (1 - Math.pow(1 - t, 3)); // easeOutCubic
+          const u = t >= 1 ? 1 : (1 - Math.pow(1 - t, 3));
 
           player.ax = sx + (ex - sx) * u;
           player.ay = sy + (ey - sy) * u;
@@ -787,13 +754,9 @@
     target.ax = pB.x; target.ay = pB.y;
 
     followPlayer(p);
-    maybeUnlockDirection(p);
-    maybeUnlockDirection(target);
 
-    if(hasBedroom(p, "swap_any_bedroom")){
-      const swapCard = p.bedroom.find(c => c.key === "swap_any_bedroom");
-      if(swapCard?.img) openCardImage(swapCard.img);
-    }
+    const swapCard = p.bedroom.find(c => c.key === "swap_any_bedroom");
+    if(swapCard?.img) openCardImage(swapCard.img);
 
     await showInfo("Bedroom Swap", "SWAP SPOTS WITH ANY PLAYER ON THE BOARD.");
     log(`${p.name} uses Bedroom Swap to swap with ${target.name}.`);
@@ -1102,7 +1065,7 @@
       return;
     }
 
-    log(`${p.name} moves ahead ${r} spaces.`);
+    log(`${p.name} moves ahead ${r} spaces (clockwise).`);
     await doForcedMove(r, "cw");
   }
 
@@ -1137,7 +1100,6 @@
 
     const card = g.oneHitDeck.draw();
     if(!card){
-      // rebuild
       g.oneHitDeck = makeDeck(ONE_HIT_WONDERS);
       g.oneHitDeck.shuffle();
       const again = g.oneHitDeck.draw();
@@ -1151,13 +1113,21 @@
     log(`${p.name} draws ONE HIT WONDER: ${card.title}`);
   }
 
+  // Russians is the ONLY place you choose direction.
   async function russians(){
     const r = rollD20();
-    const p = currentPlayer();
 
-    const dir = await chooseDirectionIfAllowed(p, r);
+    const dir = await new Promise(resolve => {
+      openModal({
+        title:"The Russians",
+        body:`Roll d20 = ${r}\nChoose direction to move ${r} spaces.`,
+        actions:[
+          {label:"Clockwise", onClick:()=>resolve("cw")},
+          {label:"Counterclockwise", onClick:()=>resolve("ccw")}
+        ]
+      });
+    });
 
-    await showInfo("The Russians", `Roll d20 = ${r}\nMove ${r} spaces ${dir === "cw" ? "clockwise" : "counterclockwise"}.`);
     await doForcedMove(r, dir);
   }
 
@@ -1276,7 +1246,7 @@
       case 1: return "Collect $5 from the bank.";
       case 2: return "Transport to s20.";
       case 3: return "Lose a turn.";
-      case 4: return "Win check: if cash in hand >= $200 you win.\nFork choice applies when passing s4 from s3 clockwise.\nDirection choice unlocks after you reach s4+ at least once.";
+      case 4: return "Win check: if cash in hand >= $200 you win.\nFork choice applies when passing s4 from s3 clockwise.";
       case 5: return "Choose a player. Both roll d20. Highest wins $20 from the bank.";
       case 6:
       case 22: return "Roll d20.\n1-9: lose a turn\n10-20: steal 1 Bedroom resource from another player.";
@@ -1298,11 +1268,11 @@
       case 20: return "Draw a Bedroom Shop resource card.";
       case 21: return "Choose a player.\nThey pay you $10 OR lose a turn.";
       case 23: return "Lose $5 to the bank.";
-      case 24: return "Roll d20.\n1-9: lose a turn\n10-20: move ahead that many spaces.";
+      case 24: return "Roll d20.\n1-9: lose a turn\n10-20: move ahead that many spaces (clockwise).";
       case 25: return "Go to nearest occupied space clockwise, then resolve that space.";
       case 26: return "Each player gets $10 from the bank.";
       case 28: return "Draw a One Hit Wonder card (held, single-use).";
-      case 29: return "Roll d20. Move that many spaces.\nDirection choice depends on whether you've cleared s0-s3 yet.";
+      case 29: return "Roll d20.\nChoose clockwise or counterclockwise.\nThis is the ONLY space with direction choice.";
       case 30: return "Transport to s7.";
       case 31: return "Lose $10 to the bank.";
       case 32: return "Roll again.";
@@ -1360,9 +1330,8 @@
     state.phase = Phase.Moving;
     refreshPlayUI();
 
-    const dir = await chooseDirectionIfAllowed(p, steps);
-
-    const path = await computePath(p.pos, steps, dir);
+    // Always clockwise on normal movement.
+    const path = await computePath(p.pos, steps, "cw");
     await animateAlongPath(p, path);
 
     const usePlus = await maybeUsePlus1();
@@ -1432,7 +1401,6 @@
         usedPlus1ThisTurn: false,
         ax: p0.x, ay: p0.y,
         _forkMode: null,
-        dirUnlocked: false,
       };
     });
 
@@ -1453,9 +1421,7 @@
     logEl.innerHTML = "";
     log("New game started.");
 
-    // Start camera centered on player 0 chip
-    const p0 = state.game.players[0];
-    followPlayer(p0);
+    followPlayer(state.game.players[0]);
 
     state.phase = Phase.StartTurn;
     showPlay();
@@ -1554,7 +1520,6 @@
       `Cash: $${p.cash}\n` +
       `One Hit Wonders: ${p.oneHit.length}\n` +
       `Bedroom cards: ${p.bedroom.length}\n` +
-      `Direction unlocked: ${p.dirUnlocked ? "YES" : "no"}\n` +
       `Phase: ${state.phase}`;
 
     btnRoll.disabled = !(state.phase === Phase.StartTurn) || state.phase === Phase.GameOver;
@@ -1571,7 +1536,6 @@
         `<div class="name">${pl.name}</div>` +
         `<div class="meta">Cash: $${pl.cash} • Space: s${pl.pos}</div>` +
         `<div class="meta">Lose turn: ${pl.loseTurn ? "YES" : "no"} • Extra turns: ${pl.extraTurnQueued}</div>` +
-        `<div class="meta">Direction unlocked: ${pl.dirUnlocked ? "YES" : "no"}</div>` +
         `<div class="meta">Bedroom: ${bedroomTitles}</div>` +
         `<div class="meta">One Hit: ${oneHitTitles}</div>`;
       playersStatus.appendChild(div);
