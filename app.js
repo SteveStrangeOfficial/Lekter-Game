@@ -68,16 +68,24 @@
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  function openModal({title, body, actions}){
-    modalTitle.textContent = title;
-    modalBody.textContent = body;
-    modalActions.innerHTML = "";
-    for (const a of actions){
-      const b = document.createElement("button");
-      b.textContent = a.label;
-      if (a.danger) b.classList.add("danger");
-      b.onclick = () => { closeModal(); a.onClick?.(); };
-      modalActions.appendChild(b);
+function openModal({title, body, actions}){
+  modalTitle.textContent = title ?? "";
+  modalBody.textContent = body ?? "";
+  modalActions.innerHTML = "";
+
+  // FAILSAFE: always give the user a way out
+  const safeActions = (Array.isArray(actions) && actions.length) ? actions : [{ label:"OK" }];
+
+  for (const a of safeActions){
+    const b = document.createElement("button");
+    b.textContent = a.label;
+    if (a.danger) b.classList.add("danger");
+    b.onclick = () => { closeModal(); a.onClick?.(); };
+    modalActions.appendChild(b);
+  }
+
+  modalBackdrop.classList.remove("hidden");
+}
     }
     modalBackdrop.classList.remove("hidden");
   }
