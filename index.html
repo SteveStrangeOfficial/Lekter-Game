@@ -13,9 +13,18 @@
 
   <main class="layout">
     <section class="stage">
-      <canvas id="board" width="1280" height="720"></canvas>
-      <div class="hint" id="hint"></div>
-    </section>
+  <canvas id="board" width="1280" height="720"></canvas>
+
+  <div id="infoCard" class="infoCard hidden">
+    <div class="infoTitle" id="infoTitle"></div>
+    <div class="infoBody" id="infoBody"></div>
+    <div class="infoActions">
+      <button id="infoOk">OK</button>
+    </div>
+  </div>
+
+  <div class="hint" id="hint"></div>
+</section>
 
     <aside class="panel">
       <!-- MAIN MENU -->
