@@ -307,25 +307,20 @@
     "You Took Too Much"
   ];
 
-  // ----------------------------
   // Movement (NO FORK)
-  // Rules:
-  // - Normal movement is clockwise.
-  // - CCW happens ONLY on The Russians (choice) and Took Too Much (forced CCW).
-  // - s0–s3 are ONLY reachable when you are at s0 (start/teleport to s0).
-  //   The main loop is s4..s36, looping back to s4.
-  // ----------------------------
+  // Normal movement: clockwise
+  // CCW: ONLY Russians (choice) and Took Too Much (forced)
+  // s0–s3 are only reachable from s0 path, main loop is s4..s36.
   function nextCW(pos){
     if(pos < 4) return pos + 1;     // s0->s1->s2->s3->s4
     if(pos === 36) return 4;        // loop back to s4
     return pos + 1;                 // s4..s35 -> +1
   }
   function prevCCW(pos){
-    if(pos === 4) return 36;        // loop back
-    if(pos > 4) return pos - 1;     // s36..s5 -> -1
-    // For s0-s3, keep simple backwards along that branch
+    if(pos === 4) return 36;
+    if(pos > 4) return pos - 1;
     if(pos === 0) return 0;
-    return pos - 1;                 // s3->s2->s1->s0
+    return pos - 1;
   }
 
   // Cards (images: assets/cards/1.png ... assets/cards/18.png)
@@ -382,7 +377,6 @@
       kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:10}], img:18 },
   ];
 
-  // State
   const Phase = {
     Menu: "Menu",
     Mapping: "Mapping",
@@ -402,7 +396,7 @@
     game: null,
   };
 
-  // Random draw each time (not just shuffled order)
+  // Random draw each time
   function makeDeck(cards){
     const d = cards.map(c => ({...c}));
     return {
@@ -447,7 +441,6 @@
 
     log(`${eliminated.name} is eliminated (${reason}). Cash: $${eliminated.cash}.`);
 
-    // Adjust turn pointer before removal
     if(idx < g.turn) g.turn -= 1;
 
     g.players.splice(idx, 1);
@@ -465,7 +458,6 @@
       return;
     }
 
-    // If current player got removed, the next player in line should go now.
     if(wasCurrent){
       if(g.turn >= g.players.length) g.turn = 0;
       state.phase = Phase.StartTurn;
@@ -479,7 +471,6 @@
       return;
     }
 
-    // If someone else got removed, game continues normally.
     if(g.turn >= g.players.length) g.turn = 0;
     refreshPlayUI();
   }
@@ -490,20 +481,19 @@
     p.cash += amt;
     log(`${p.name} collects $${amt}${reason ? " ("+reason+")" : ""}.`);
     checkWinImmediate(p);
-    // collecting can’t worsen debt, but keep it consistent
     tryEliminateIfInDebt(p, "Debt");
     refreshPlayUI();
   }
 
   function bankPay(p, amount, reason){
-    p.cash -= amount; // can go negative
+    p.cash -= amount;
     log(`${p.name} pays $${amount}${reason ? " ("+reason+")" : ""}.`);
     tryEliminateIfInDebt(p, reason ?? "Debt");
     refreshPlayUI();
   }
 
   function payPlayer(from, to, amount, reason){
-    from.cash -= amount; // can go negative
+    from.cash -= amount;
     to.cash += amount;
     log(`${from.name} pays ${to.name} $${amount}${reason ? " ("+reason+")" : ""}.`);
     checkWinImmediate(to);
@@ -527,15 +517,13 @@
 
   function rollD20(){ return 1 + Math.floor(Math.random() * 20); }
 
-  // $10 pass bonus ONLY if player holds the Bedroom card.
-  // Trigger any time a move step ENTERS s4 (landing counts).
+  // $10 pass bonus ONLY if player holds the Bedroom card
   function applyPassS4BonusIfCrossing(p, from, to){
     if(to === 4 && from !== 4 && hasBedroom(p, "pass_s4_plus10")){
       bankCollect(p, 10, "Pass First of the Month");
     }
   }
 
-  // Compute path indices
   async function computePath(startPos, steps, dir){
     let pos = startPos;
     const p = currentPlayer();
@@ -543,18 +531,13 @@
 
     for(let i=0;i<steps;i++){
       const next = (dir === "cw") ? nextCW(pos) : prevCCW(pos);
-
-      // Apply pass bonus when entering s4 (only if card held)
       applyPassS4BonusIfCrossing(p, pos, next);
-
       pos = next;
       path.push(pos);
     }
-
     return path;
   }
 
-  // Animate along path with camera follow
   function animateAlongPath(player, pathIndices){
     return new Promise(resolve => {
       if(!pathIndices.length){ resolve(); return; }
@@ -871,6 +854,7 @@
   // ----------------------------
   // Space effects
   // ----------------------------
+
   async function battleRap(){
     const p = currentPlayer();
     const opponent = await pickOtherPlayer(p, "Battle Rap: choose an opponent.");
@@ -888,10 +872,14 @@
     bankCollect(winner, 20, "Battle Rap win");
   }
 
+  // UPDATED: s6 / s22 rule
+  // 1-9: lose a turn
+  // 10-20: draw a Bedroom Shop card
   async function basementAttempt(){
     const p = currentPlayer();
     const r = rollD20();
-    await showInfo("Basement Suicide Attempt", "Roll d20.\n1-9: lose a turn\n10-20: steal a Bedroom resource from another player.");
+
+    await showInfo("Basement Suicide Attempt", "Roll d20.\n1-9: lose a turn\n10-20: draw a Bedroom Shop card.");
     log(`${p.name} rolls d20: ${r}`);
 
     if(r <= 9){
@@ -900,29 +888,8 @@
       return;
     }
 
-    const victims = state.game.players.filter(pl => pl.id !== p.id && pl.bedroom.length > 0);
-    if(victims.length === 0){
-      log("No one has a Bedroom Shop resource to steal.");
-      return;
-    }
-
-    const victim = await new Promise(resolve => {
-      openModal({
-        title:"Steal a resource",
-        body:"Choose who to steal 1 Bedroom Shop resource card from.",
-        actions: victims.map(v => ({label:v.name, onClick:()=>resolve(v)}))
-          .concat([{label:"Cancel", danger:true, onClick:()=>resolve(null)}])
-      });
-    });
-    if(!victim) return;
-
-    const stolen = victim.bedroom.splice(Math.floor(Math.random()*victim.bedroom.length),1)[0];
-    p.bedroom.push(stolen);
-
-    if(stolen.img) openCardImage(stolen.img);
-    await showInfo("Stolen Resource", stolen.text ?? stolen.title);
-
-    log(`${p.name} steals Bedroom resource from ${victim.name}: ${stolen.title}`);
+    log(`${p.name} draws a Bedroom Shop card (Basement roll 10-20).`);
+    await drawBedroomShop();
   }
 
   async function hookahLounge(){
@@ -1290,7 +1257,7 @@
       case 4: return "Win check: if cash in hand >= $200 you win.";
       case 5: return "Choose a player. Both roll d20. Highest wins $20 from the bank.";
       case 6:
-      case 22: return "Roll d20.\n1-9: lose a turn\n10-20: steal 1 Bedroom resource from another player.";
+      case 22: return "Roll d20.\n1-9: lose a turn\n10-20: draw a Bedroom Shop card.";
       case 7: return "Another player plays a random Spotify song.\nArtist correct: +$20\nSong correct: +$10\nBoth: +$30";
       case 8: return "Lose $5 to the bank.";
       case 9: return "Choose a player. Both go to s0.\nBoth roll d20.\nHighest wins $20 from the bank.";
@@ -1616,8 +1583,8 @@
     const px = (e.clientX - rect.left) * (canvas.width / rect.width);
     const py = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    const wx = (px - (canvas.width*0.5 - cam.x * cam.scale)) / cam.scale;
-    const wy = (py - (canvas.height*0.5 - cam.y * cam.scale)) / cam.scale;
+    const wx = (px - (canvas.height*0 + (canvas.width*0.5 - cam.x * cam.scale))) / cam.scale;
+    const wy = (py - (canvas.height*0 + (canvas.height*0.5 - cam.y * cam.scale))) / cam.scale;
     return {x: wx, y: wy};
   }
 
