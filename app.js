@@ -1,7 +1,4 @@
 (() => {
-  // ----------------------------
-  // Constants / Storage
-  // ----------------------------
   const BOARD_IMAGE_PATH = "assets/board.png";
   const SPACE_COUNT = 37;
   const LS_COORDS_KEY = "lekter_coords_v1";
@@ -13,11 +10,8 @@
   const WIN_CASH = 200;
 
   const ZOOM_SCALE = 2.2;
-  const ZOOM_MS = 6000;
+  const ZOOM_MS = 4000; // was 6000
 
-  // ----------------------------
-  // DOM
-  // ----------------------------
   const el = (id) => document.getElementById(id);
 
   const canvas = el("board");
@@ -49,14 +43,18 @@
   const btnBackMenu2 = el("btnBackMenu2");
   const coordsOut = el("coordsOut");
 
+  // Modal
   const modalBackdrop = el("modalBackdrop");
   const modalTitle = el("modalTitle");
   const modalBody = el("modalBody");
   const modalActions = el("modalActions");
 
-  // ----------------------------
-  // UI helpers
-  // ----------------------------
+  // Instruction card overlay
+  const infoCard = el("infoCard");
+  const infoTitle = el("infoTitle");
+  const infoBody = el("infoBody");
+  const infoOk = el("infoOk");
+
   function setHint(t){ if (hint) hint.textContent = t; }
 
   function log(line){
@@ -68,7 +66,7 @@
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  // MODAL FIX: never rely on class toggles. Use inline display.
+  // Modal uses inline display so it can’t soft-lock
   function closeModal(){
     modalTitle.textContent = "";
     modalBody.textContent = "";
@@ -99,8 +97,35 @@
   });
 
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
+    if (e.key === "Escape") {
+      closeModal();
+      hideInfo();
+    }
   });
+
+  // Instruction card
+  let infoResolver = null;
+
+  function showInfo(title, body){
+    return new Promise(resolve => {
+      infoTitle.textContent = title ?? "";
+      infoBody.textContent = body ?? "";
+      infoCard.classList.remove("hidden");
+      infoResolver = resolve;
+    });
+  }
+
+  function hideInfo(){
+    if (!infoCard) return;
+    infoCard.classList.add("hidden");
+    if (infoResolver) {
+      const r = infoResolver;
+      infoResolver = null;
+      r();
+    }
+  }
+
+  infoOk.addEventListener("click", () => hideInfo());
 
   function showMenu(){
     menuPanel.classList.remove("hidden");
@@ -124,18 +149,32 @@
     refreshPlayUI();
   }
 
-  // ----------------------------
   // Board image
-  // ----------------------------
   const boardImg = new Image();
   let boardLoaded = false;
   boardImg.onload = () => { boardLoaded = true; };
   boardImg.onerror = () => { boardLoaded = false; setHint("Could not load assets/board.png"); };
   boardImg.src = BOARD_IMAGE_PATH;
 
-  // ----------------------------
-  // Coordinates mapping
-  // ----------------------------
+  // Resize canvas to its CSS size so circles stay circles
+  function resizeCanvasToDisplaySize(){
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, Math.floor(rect.width));
+    const h = Math.max(1, Math.floor(rect.height));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      // also reset camera to center
+      cam.x = canvas.width * 0.5;
+      cam.y = canvas.height * 0.5;
+      cam.targetX = cam.x;
+      cam.targetY = cam.y;
+    }
+  }
+
+  window.addEventListener("resize", () => resizeCanvasToDisplaySize());
+
+  // Coords
   let COORDS = loadCoords();
 
   function loadCoords(){
@@ -160,7 +199,6 @@
 
   function getSpaceXY(i){
     if(haveCoords() && COORDS[i]) return COORDS[i];
-
     // fallback circle
     const cx = canvas.width * 0.5;
     const cy = canvas.height * 0.5;
@@ -169,9 +207,7 @@
     return { x: cx + Math.cos(ang) * r, y: cy + Math.sin(ang) * r };
   }
 
-  // ----------------------------
   // Camera / zoom
-  // ----------------------------
   let cam = {
     scale: 1,
     x: canvas.width * 0.5,
@@ -207,50 +243,48 @@
     cam.y += (cam.targetY - cam.y) * Math.min(1, dt * k);
   }
 
-  // ----------------------------
-  // Spaces
-  // ----------------------------
-  const SPACES = [
+  // Spaces list (for title display)
+  const SPACE_TITLES = [
     "START / Living Room",
-    "Expired peanut butter & matzoh (+$5)",
-    "Go to Meech's Bedroom Shop (to s20)",
-    "School of Rock script (lose a turn)",
-    "First of the Month (win check)",
+    "Expired peanut butter & matzoh",
+    "Go to Meech's Bedroom Shop",
+    "School of Rock script",
+    "First of the Month",
     "Battle Rap",
     "Basement Suicide Attempt",
     "The Hookah Lounge",
-    "You Bought Shisha (-$5)",
+    "You Bought Shisha",
     "Fake Family",
     "Sell Your Blood",
     "MC Sketchy's Closet of Shame",
-    "Sound Check (roll again)",
-    "Ate Sour Pizza (-$5)",
-    "Darron Had a Seizure (roll again)",
+    "Sound Check",
+    "Ate Sour Pizza",
+    "Darron Had a Seizure",
     "Robbed by Kalif",
-    "Pack a Bowl (to s7)",
+    "Pack a Bowl",
     "You Blew It All",
     "Lose a Turn",
-    "Practice Time (to s34)",
+    "Practice Time",
     "Meech's Bedroom Shop",
     "Blackmail",
     "Basement Suicide Attempt",
-    "Toothbrush (-$5)",
+    "Toothbrush",
     "High Tension Towers",
     "Feat. on the Track",
     "Orgy Night",
-    "Practice Time (to s34)",
+    "Practice Time",
     "One Hit Wonder",
     "The Russians",
-    "Pack a Bowl (to s7)",
-    "Komar's Piss Jugs (-$10)",
-    "Lauren had a seizure (roll again)",
+    "Pack a Bowl",
+    "Komar's Piss Jugs",
+    "Lauren had a seizure",
     "MC Sketchy's Closet of Shame",
     "The Inferno",
     "Robbed by the Gash",
-    "You Took Too Much (roll backwards)"
+    "You Took Too Much"
   ];
 
-  // Main clockwise ring: s0->...->s36->s4, and s4->s5
+  // Movement graph
   function nextCW(pos){
     if(pos === 36) return 4;
     if(pos === 4) return 5;
@@ -265,9 +299,7 @@
     return from === 3 && to === 4;
   }
 
-  // ----------------------------
-  // Decks (full text)
-  // ----------------------------
+  // Decks
   const BEDROOM_SHOP = [
     { key:"pass_s4_plus10", title:"MEECH APPRECIATES YOUR 'BUSINESS.'",
       text:"EVERY TIME YOU PASS THE \"FIRST OF THE MONTH\" COLLECT $10.\nMEECH APPRECIATES YOUR 'BUSINESS.'" },
@@ -300,7 +332,7 @@
       text:"BEARD BROUGHT HIS MOTHERS BROOM TO THE HOUSE\n\nROLL 1-9\nYOU UNLEASH THE UNHOLY SPIRIT OF LA LLORONA INTO THE HOUSE\n-$10\n\nROLL 10-20\nYOU SWEEP UP ALL THE ASH FROM THE HOOKAH COALS. PRAY A BLESSING, RETURN THE BROOM AND EVERYTHING IS FINE\n+$20",
       kind:"roll_bank", rules:[{min:1,max:9,pay:10},{min:10,max:20,collect:20}] },
     { title:"SLIP ON KALIF'S PISS",
-      text:"YOU SLIP ON KALIF'S PISS IN THE KITCHEN\n\nROLL 1-9\nBREAK YOUR ANKLE AND THE PISS SPLASHES IN YOUR MOUTH\n-$20\n\nROLL 10-20\n...MARINATING IN YOUR PISS FOR 6 HRS\n+$20",
+      text:"YOU SLIP ON KALIF'S PISS IN THE KITCHEN\n\nROLL 1-9\nBREAK YOUR ANKLE AND THE PISS SPLASHES IN YOUR MOUTH\n-$20\n\nROLL 10-20\nHE PASSES OUT AND YOU PISS ON HIS PANTS TO MAKE HIM THINK HE PISSED HIMSELF WHILE HE WAS BLACKED OUT BUT REALLY HE'S JUST BEEN MARINATING IN YOUR PISS FOR 6 HRS\n+$20",
       kind:"roll_bank", rules:[{min:1,max:9,pay:20},{min:10,max:20,collect:20}] },
     { title:"STEVE'S MOM DROPS OFF A BAG OF FOOD",
       text:"STEVE'S MOM DROPS OFF A BAG OF FOOD\n\nROLL 1-9\nIT'S CANNED BEETS & EXPIRED MATZAH\n-$10\n\nROLL 10-20\nIT'S A NEW BAG OF OREOS AND 3 BOXES OF THE GOOD MAC AND CHEESE\n+$10",
@@ -320,9 +352,7 @@
       text:"I WANT IT ALL\n\nCOLLECT $30 FROM THE BANK RIGHT NOW.", kind:"bank_collect", amount:30 },
   ];
 
-  // ----------------------------
-  // Game state
-  // ----------------------------
+  // State
   const Phase = {
     Menu: "Menu",
     Mapping: "Mapping",
@@ -407,8 +437,11 @@
     }
   }
 
+  // Rolls
+  function rollD6(){ return 1 + Math.floor(Math.random() * 6); }
   function rollD20(){ return 1 + Math.floor(Math.random() * 20); }
 
+  // Fork prompt
   async function chooseForkIfNeeded(){
     return new Promise(resolve => {
       openModal({
@@ -426,11 +459,15 @@
     if(from === 3 && to === 4 && hasBedroom(p, "pass_s4_plus10")){
       bankCollect(p, 10, "Pass First of the Month");
     }
+    // mark global passed-s4 for direction unlocking
+    state.game.hasPassedS4 = true;
   }
 
-  async function computeDestination(startPos, steps, dir){
+  // Compute path indices (so we can animate along board smoothly)
+  async function computePath(startPos, steps, dir){
     let pos = startPos;
     const p = currentPlayer();
+    const path = [];
 
     for(let i=0;i<steps;i++){
       let next = (dir === "cw") ? nextCW(pos) : prevCCW(pos);
@@ -438,6 +475,8 @@
       if(dir === "cw" && isForkCrossCW(pos, next)){
         applyPassS4BonusIfCrossing(p, pos, next);
         pos = 4;
+        path.push(pos);
+
         const choice = await chooseForkIfNeeded();
         p._forkMode = choice;
         continue;
@@ -451,39 +490,58 @@
       }
 
       pos = next;
+      path.push(pos);
     }
 
     p._forkMode = null;
-    return pos;
+    return path; // list of visited spaces, last is destination
   }
 
-  function animateMoveTo(player, destIndex){
+  // Animate along path points with constant speed
+  function animateAlongPath(player, pathIndices){
     return new Promise(resolve => {
-      const target = getSpaceXY(destIndex);
-      player.tx = target.x; player.ty = target.y;
+      if(!pathIndices.length){ resolve(); return; }
 
-      const sx = player.ax, sy = player.ay;
-      const ex = player.tx, ey = player.ty;
+      const pts = pathIndices.map(i => ({ i, ...getSpaceXY(i) }));
 
-      const dist = Math.hypot(ex - sx, ey - sy);
-      const duration = Math.max(350, Math.min(1400, dist * 1.2));
-      const t0 = nowMs();
+      let seg = 0;
+      let sx = player.ax, sy = player.ay;
 
-      function step(){
-        const t = (nowMs() - t0) / duration;
-        const u = t >= 1 ? 1 : (1 - Math.pow(1 - t, 3));
-        player.ax = sx + (ex - sx) * u;
-        player.ay = sy + (ey - sy) * u;
+      const speed = 550; // pixels per second, tweak as needed
 
-        if(t >= 1){
-          player.ax = ex; player.ay = ey;
-          player.pos = destIndex;
+      function animateSegment(){
+        if(seg >= pts.length){
           resolve();
           return;
         }
+
+        const target = pts[seg];
+        const ex = target.x, ey = target.y;
+        const dist = Math.hypot(ex - sx, ey - sy);
+        const duration = Math.max(140, (dist / speed) * 1000);
+        const t0 = nowMs();
+
+        function step(){
+          const t = (nowMs() - t0) / duration;
+          const u = t >= 1 ? 1 : (1 - Math.pow(1 - t, 3)); // easeOutCubic
+
+          player.ax = sx + (ex - sx) * u;
+          player.ay = sy + (ey - sy) * u;
+
+          if(t >= 1){
+            player.ax = ex; player.ay = ey;
+            player.pos = target.i;
+            sx = ex; sy = ey;
+            seg++;
+            requestAnimationFrame(animateSegment);
+            return;
+          }
+          requestAnimationFrame(step);
+        }
         requestAnimationFrame(step);
       }
-      requestAnimationFrame(step);
+
+      animateSegment();
     });
   }
 
@@ -592,7 +650,7 @@
     owner.oneHit.splice(handIndex, 1);
     g.oneHitDeck.putBackAndShuffle(card);
 
-    log(`${owner.name} plays ONE HIT WONDER: ${card.title}`);
+    await showInfo(`One Hit Wonder: ${card.title}`, card.text);
 
     if(card.kind === "bank_collect"){
       bankCollect(owner, card.amount, card.title);
@@ -665,6 +723,7 @@
     const pB = getSpaceXY(target.pos);
     target.ax = pB.x; target.ay = pB.y;
 
+    await showInfo("Bedroom Swap", "SWAP SPOTS WITH ANY PLAYER ON THE BOARD.");
     log(`${p.name} uses Bedroom Swap to swap with ${target.name}.`);
     checkWinImmediate(p);
     checkWinImmediate(target);
@@ -682,8 +741,11 @@
     state.phase = Phase.BeforeResolve;
     refreshPlayUI();
 
-    await decisionMomentMenu("Before resolving this space.");
-    if(state.phase === Phase.GameOver) return;
+    // If player has playable cards, give a decision moment. If not, skip.
+    if (canCurrentPlayerPlayNow()) {
+      await decisionMomentMenu("Before resolving this space.");
+      if(state.phase === Phase.GameOver) return;
+    }
 
     state.phase = Phase.Resolving;
     refreshPlayUI();
@@ -693,7 +755,18 @@
     state.phase = Phase.AfterResolve;
     refreshPlayUI();
 
-    await decisionMomentMenu("After resolving. You can play cards, then End Turn.");
+    if (canCurrentPlayerPlayNow()) {
+      await decisionMomentMenu("After resolving. You can play cards, then End Turn.");
+    }
+  }
+
+  // Autoplay rule: if player has no playable cards, start turn with roll immediately
+  function canCurrentPlayerPlayNow(){
+    if(!state.game) return false;
+    const p = currentPlayer();
+    const hasOneHit = p.oneHit.length > 0;
+    const hasBedroomSwap = hasBedroom(p, "swap_any_bedroom");
+    return hasOneHit || hasBedroomSwap;
   }
 
   async function teleportThenResolve(dest){
@@ -701,13 +774,14 @@
     state.phase = Phase.Moving;
     refreshPlayUI();
 
-    await animateMoveTo(p, dest);
+    const path = [dest];
+    await animateAlongPath(p, path);
 
     const usePlus = await maybeUsePlus1();
     if(usePlus){
       p.usedPlus1ThisTurn = true;
-      const extraDest = await computeDestination(p.pos, 1, "cw");
-      await animateMoveTo(p, extraDest);
+      const extraPath = await computePath(p.pos, 1, "cw");
+      await animateAlongPath(p, extraPath);
       log(`${p.name} uses +1 Move.`);
     }
 
@@ -721,14 +795,14 @@
     state.phase = Phase.Moving;
     refreshPlayUI();
 
-    const dest = await computeDestination(p.pos, steps, dir);
-    await animateMoveTo(p, dest);
+    const path = await computePath(p.pos, steps, dir);
+    await animateAlongPath(p, path);
 
     const usePlus = await maybeUsePlus1();
     if(usePlus){
       p.usedPlus1ThisTurn = true;
-      const extraDest = await computeDestination(p.pos, 1, "cw");
-      await animateMoveTo(p, extraDest);
+      const extraPath = await computePath(p.pos, 1, "cw");
+      await animateAlongPath(p, extraPath);
       log(`${p.name} uses +1 Move.`);
     }
 
@@ -738,7 +812,7 @@
   }
 
   // ----------------------------
-  // Complex spaces
+  // Space effects
   // ----------------------------
   async function battleRap(){
     const p = currentPlayer();
@@ -747,7 +821,7 @@
 
     const r1 = rollD20();
     const r2 = rollD20();
-    log(`${p.name} rolls ${r1}. ${opponent.name} rolls ${r2}.`);
+    await showInfo("Battle Rap", `Both players roll d20.\nWinner gets $20.\n\n${p.name}: ${r1}\n${opponent.name}: ${r2}`);
 
     if(r1 === r2){
       log("Tie. Nobody wins $20.");
@@ -760,7 +834,8 @@
   async function basementAttempt(){
     const p = currentPlayer();
     const r = rollD20();
-    log(`${p.name} rolls d20: ${r} (${SPACES[p.pos]})`);
+    await showInfo("Basement Suicide Attempt", "Roll d20.\n1-9: lose a turn\n10-20: steal a Bedroom resource from another player.");
+    log(`${p.name} rolls d20: ${r}`);
 
     if(r <= 9){
       p.loseTurn = true;
@@ -786,20 +861,23 @@
 
     const stolen = victim.bedroom.splice(Math.floor(Math.random()*victim.bedroom.length),1)[0];
     p.bedroom.push(stolen);
+    await showInfo("Stolen Resource", stolen.text ?? stolen.title);
     log(`${p.name} steals Bedroom resource from ${victim.name}: ${stolen.title}`);
   }
 
   async function hookahLounge(){
     const p = currentPlayer();
+    await showInfo("Hookah Lounge", "Another player shuffles a Spotify playlist.\nArtist correct: +$20\nSong correct: +$10\nBoth: +$30");
+
     const choice = await new Promise(resolve => {
       openModal({
         title:"Hookah Lounge",
-        body:"Another player plays a random Spotify song.\nChoose what you guessed correctly:",
+        body:"What did you guess correctly?",
         actions:[
-          {label:"Got ARTIST (+$20)", onClick:()=>resolve("artist")},
-          {label:"Got SONG (+$10)", onClick:()=>resolve("song")},
-          {label:"Got BOTH (+$30)", onClick:()=>resolve("both")},
-          {label:"Got NONE (+$0)", onClick:()=>resolve("none")}
+          {label:"Artist (+$20)", onClick:()=>resolve("artist")},
+          {label:"Song (+$10)", onClick:()=>resolve("song")},
+          {label:"Both (+$30)", onClick:()=>resolve("both")},
+          {label:"None (+$0)", onClick:()=>resolve("none")}
         ]
       });
     });
@@ -815,9 +893,9 @@
     const opponent = await pickOtherPlayer(p, "Fake Family: choose an opponent.");
     if(!opponent) return;
 
-    log(`Both players go to Living Room (s0).`);
-    const s0 = getSpaceXY(0);
+    await showInfo("Fake Family", "Choose another player.\nBoth go to Living Room.\nBoth roll d20.\nWinner gets $20.");
 
+    const s0 = getSpaceXY(0);
     p.pos = 0; p.ax = s0.x; p.ay = s0.y;
     opponent.pos = 0; opponent.ax = s0.x + 30; opponent.ay = s0.y;
 
@@ -840,6 +918,7 @@
     const card = g.closetDeck.draw();
     g.closetDeck.putBackAndShuffle(card);
 
+    await showInfo(`Closet of Shame: ${card.title}`, card.text);
     log(`${p.name} draws CLOSET OF SHAME: ${card.title}`);
 
     if(card.kind === "target_roll_pay_to_drawer"){
@@ -866,6 +945,8 @@
     const p = currentPlayer();
     const canLoseResource = p.bedroom.length > 0;
 
+    await showInfo(label, "Choose what you lose:\nLose $10 OR lose 1 Bedroom resource card.");
+
     const choice = await new Promise(resolve => {
       const actions = [
         { label:"Lose $10", onClick:()=>resolve("money") },
@@ -888,6 +969,7 @@
       } else {
         log(`${p.name} loses a resource: ${lost.title}`);
       }
+      await showInfo("Lost Resource", lost.text ?? lost.title);
     }
   }
 
@@ -895,6 +977,7 @@
     const p = currentPlayer();
     const g = state.game;
 
+    await showInfo("You Blew It All", "All money goes back to the bank.\nAll Bedroom resources go to Kalif's stash.");
     log(`${p.name} BLEW IT ALL. Money to bank. Resources to Kalif's stash.`);
     p.cash = 0;
 
@@ -912,6 +995,7 @@
     g.bedroomDeck.putBackAndShuffle(card);
 
     p.bedroom.push(card);
+    await showInfo(`Bedroom Shop: ${card.title}`, card.text);
     log(`${p.name} gains BEDROOM SHOP card: ${card.title}`);
   }
 
@@ -920,12 +1004,14 @@
     const target = await pickOtherPlayer(p, "Blackmail: choose a player.");
     if(!target) return;
 
+    await showInfo("Blackmail", `${target.name} must choose:\nPay ${p.name} $10 OR lose a turn.`);
+
     const choice = await new Promise(resolve => {
       openModal({
         title:"Blackmail",
         body:`${target.name} chooses:\nPay ${p.name} $10, OR lose a turn.`,
         actions:[
-          {label:`Pay $10 to ${p.name}`, onClick:()=>resolve("pay")},
+          {label:`Pay $10`, onClick:()=>resolve("pay")},
           {label:"Lose a turn", onClick:()=>resolve("turn")}
         ]
       });
@@ -941,6 +1027,8 @@
 
   async function highTensionTowers(){
     const p = currentPlayer();
+    await showInfo("High Tension Towers", "Roll d20.\n1-9: lose a turn\n10-20: move ahead that many spaces.");
+
     const r = rollD20();
     log(`${p.name} rolls d20 for High Tension Towers: ${r}`);
 
@@ -958,6 +1046,8 @@
     const p = currentPlayer();
     const g = state.game;
 
+    await showInfo("Feat. on the Track", "Go to the nearest space (clockwise) that already has another player.\nThen resolve that space.");
+
     const occupied = new Set(g.players.filter(pl => pl.id !== p.id).map(pl => pl.pos));
     if(occupied.size === 0){
       log("No other players on the board. Nothing happens.");
@@ -970,7 +1060,7 @@
       pos = nextCW(pos);
       steps++;
       if(occupied.has(pos)){
-        log(`${p.name} feats to nearest occupied space: s${pos} (${SPACES[pos]}).`);
+        log(`${p.name} feats to nearest occupied space: s${pos} (${SPACE_TITLES[pos]}).`);
         await teleportThenResolve(pos);
         return;
       }
@@ -986,15 +1076,25 @@
       g.oneHitDeck = makeDeck(ONE_HIT_WONDERS);
       g.oneHitDeck.shuffle();
       p.oneHit.push(g.oneHitDeck.draw());
-      log(`${p.name} draws ONE HIT WONDER.`);
+      await showInfo("One Hit Wonder", "Drew a card.");
       return;
     }
     p.oneHit.push(card);
+    await showInfo(`One Hit Wonder: ${card.title}`, card.text);
     log(`${p.name} draws ONE HIT WONDER: ${card.title}`);
   }
 
   async function russians(){
     const r = rollD20();
+    const g = state.game;
+
+    // rule: no direction choice until first pass s4
+    if(!g.hasPassedS4){
+      await showInfo("The Russians", `You have not passed First of the Month yet.\nForced CLOCKWISE.\nMove ${r} spaces.`);
+      await doForcedMove(r, "cw");
+      return;
+    }
+
     const dir = await new Promise(resolve => {
       openModal({
         title:"The Russians",
@@ -1011,16 +1111,17 @@
 
   async function tookTooMuch(){
     const r = rollD20();
+    await showInfo("You Took Too Much", `Roll d20 and move backwards that many spaces.\nRolled: ${r}`);
     log(`${currentPlayer().name} rolls d20 for Roll Backwards: ${r}`);
     await doForcedMove(r, "ccw");
   }
 
-  // ----------------------------
-  // Resolve a space (after zoom)
-  // ----------------------------
   async function resolveSpace(spaceIndex){
     const g = state.game;
     const p = currentPlayer();
+
+    // show space instructions first
+    await showInfo(`Space s${spaceIndex}: ${SPACE_TITLES[spaceIndex]}`, spaceInstructionText(spaceIndex));
 
     if(spaceIndex === 4){
       log(`${p.name} landed on First of the Month.`);
@@ -1035,6 +1136,7 @@
       case 3: p.loseTurn = true; log(`${p.name} loses a turn (School of Rock).`); return;
 
       case 5: await battleRap(); return;
+
       case 6:
       case 22: await basementAttempt(); return;
 
@@ -1056,19 +1158,21 @@
       case 12:
       case 14:
       case 32:
-        log(`${p.name} rolls again (${SPACES[spaceIndex]}).`);
+        log(`${p.name} rolls again (${SPACE_TITLES[spaceIndex]}).`);
         state.phase = Phase.StartTurn;
         refreshPlayUI();
         await doRoll();
         return;
 
       case 13: bankPay(p, 5, "Ate Sour Pizza"); return;
+
       case 15: await robbedChoice("Robbed by Kalif", false); return;
 
       case 16:
       case 30: log(`${p.name} is transported to The Hookah Lounge (s7).`); await teleportThenResolve(7); return;
 
       case 17: await blewItAll(); return;
+
       case 18: p.loseTurn = true; log(`${p.name} loses a turn.`); return;
 
       case 19:
@@ -1080,44 +1184,91 @@
         return;
 
       case 21: await blackmail(); return;
+
       case 23: bankPay(p, 5, "Toothbrush"); return;
 
       case 24: await highTensionTowers(); return;
+
       case 25: await featOnTrack(); return;
 
       case 26:
+        await showInfo("Orgy Night", "Each player gets $10 from the bank.");
         for(const pl of g.players) bankCollect(pl, 10, "Orgy Night");
         return;
 
       case 28: await drawOneHit(); return;
+
       case 29: await russians(); return;
 
       case 31: bankPay(p, 10, "Komar's piss jugs"); return;
 
       case 34: {
+        await showInfo("The Inferno", "Roll d20 5 times.\nReceive $1 per pip total.");
         let sum = 0;
         for(let i=0;i<5;i++) sum += rollD20();
-        log(`${p.name} rolls Inferno (5x d20) total: ${sum}`);
+        log(`${p.name} rolls Inferno total: ${sum}`);
         bankCollect(p, sum, "Inferno");
         return;
       }
 
       case 35: await robbedChoice("Robbed by the Gash", true); return;
+
       case 36: await tookTooMuch(); return;
-      default: log(`${p.name} lands on ${SPACES[spaceIndex]}. No effect.`); return;
+
+      default: log(`${p.name} lands on ${SPACE_TITLES[spaceIndex]}. No effect.`); return;
     }
   }
 
-  // ----------------------------
+  function spaceInstructionText(spaceIndex){
+    switch(spaceIndex){
+      case 0: return "Free space.";
+      case 1: return "Collect $5 from the bank.";
+      case 2: return "Transport to s20.";
+      case 3: return "Lose a turn.";
+      case 4: return "Win check: if cash in hand >= $200 you win.\nFork choice applies when passing s4 from s3 clockwise.";
+      case 5: return "Choose a player. Both roll d20. Highest wins $20 from the bank.";
+      case 6:
+      case 22: return "Roll d20.\n1-9: lose a turn\n10-20: steal 1 Bedroom resource from another player.";
+      case 7: return "Another player plays a random Spotify song.\nArtist correct: +$20\nSong correct: +$10\nBoth: +$30";
+      case 8: return "Lose $5 to the bank.";
+      case 9: return "Choose a player. Both go to s0.\nBoth roll d20.\nHighest wins $20 from the bank.";
+      case 10: return "Roll d20. Collect that amount from the bank.";
+      case 11:
+      case 33: return "Draw a Closet of Shame card and follow it immediately.";
+      case 12: return "Roll again.";
+      case 13: return "Lose $5 to the bank.";
+      case 14: return "Roll again.";
+      case 15: return "Lose $10 OR lose 1 Bedroom resource card.";
+      case 16: return "Transport to s7.";
+      case 17: return "All money back to bank.\nAll Bedroom resources to Kalif's stash.";
+      case 18: return "Lose a turn.";
+      case 19:
+      case 27: return "Transport to s34.";
+      case 20: return "Draw a Bedroom Shop resource card.";
+      case 21: return "Choose a player.\nThey pay you $10 OR lose a turn.";
+      case 23: return "Lose $5 to the bank.";
+      case 24: return "Roll d20.\n1-9: lose a turn\n10-20: move ahead that many spaces.";
+      case 25: return "Go to nearest occupied space clockwise, then resolve that space.";
+      case 26: return "Each player gets $10 from the bank.";
+      case 28: return "Draw a One Hit Wonder card (held, single-use).";
+      case 29: return "Roll d20. Move that many spaces.\nAfter first pass of s4, you may choose direction.\nBefore first pass, forced clockwise.";
+      case 30: return "Transport to s7.";
+      case 31: return "Lose $10 to the bank.";
+      case 32: return "Roll again.";
+      case 34: return "Roll d20 five times. Collect $1 per total pip.";
+      case 35: return "Lose $10 OR lose 1 resource card to Kalif's stash.";
+      case 36: return "Roll d20 and move backwards that many spaces.";
+      default: return "Follow the rules for this space.";
+    }
+  }
+
   // Turn flow
-  // ----------------------------
   function startTurn(){
     if(!state.game || state.phase === Phase.GameOver) return;
 
     state.phase = Phase.StartTurn;
     const p = currentPlayer();
     p.usedPlus1ThisTurn = false;
-    state.game.lastRoll = null;
 
     log(`Turn: ${p.name}`);
 
@@ -1129,21 +1280,37 @@
     }
 
     refreshPlayUI();
+
+    // rule: if no playable cards, auto-roll immediately
+    if(!canCurrentPlayerPlayNow()){
+      setTimeout(() => {
+        if(state.phase === Phase.StartTurn) doRoll();
+      }, 150);
+    }
   }
 
   async function doRoll(){
+    if(!state.game || state.phase !== Phase.StartTurn) return;
+
     const g = state.game;
     const p = currentPlayer();
 
     state.phase = Phase.AfterRoll;
-    g.lastRoll = rollD20();
-    log(`${p.name} rolls d20: ${g.lastRoll}`);
+
+    // movement uses d6
+    const movement = rollD6();
+    g.lastRoll = movement;
+
+    log(`${p.name} rolls d6 for movement: ${movement}`);
     refreshPlayUI();
 
-    await decisionMomentMenu("Right after roll (before movement).");
-    if(state.phase === Phase.GameOver) return;
+    // decision moment after roll only if someone has playable cards
+    if (canCurrentPlayerPlayNow()) {
+      await decisionMomentMenu("Right after roll (before movement).");
+      if(state.phase === Phase.GameOver) return;
+    }
 
-    await doMoveByRoll(g.lastRoll);
+    await doMoveByRoll(movement);
   }
 
   async function doMoveByRoll(steps){
@@ -1151,20 +1318,43 @@
     state.phase = Phase.Moving;
     refreshPlayUI();
 
-    const dest = await computeDestination(p.pos, steps, "cw");
-    await animateMoveTo(p, dest);
+    const path = await computePath(p.pos, steps, "cw");
+    await animateAlongPath(p, path);
 
     const usePlus = await maybeUsePlus1();
     if(usePlus){
       p.usedPlus1ThisTurn = true;
-      const extraDest = await computeDestination(p.pos, 1, "cw");
-      await animateMoveTo(p, extraDest);
+      const extraPath = await computePath(p.pos, 1, "cw");
+      await animateAlongPath(p, extraPath);
       log(`${p.name} uses +1 Move.`);
     }
 
-    await landWithZoomThenResolve(async () => {
-      await resolveSpace(p.pos);
-    });
+    zoomToSpace(p.pos, ZOOM_MS);
+    state.phase = Phase.Zooming;
+    refreshPlayUI();
+
+    await delay(ZOOM_MS);
+
+    state.phase = Phase.BeforeResolve;
+    refreshPlayUI();
+
+    if (canCurrentPlayerPlayNow()) {
+      await decisionMomentMenu("Before resolving this space.");
+      if(state.phase === Phase.GameOver) return;
+    }
+
+    state.phase = Phase.Resolving;
+    refreshPlayUI();
+
+    await resolveSpace(p.pos);
+    if(state.phase === Phase.GameOver) return;
+
+    state.phase = Phase.AfterResolve;
+    refreshPlayUI();
+
+    if (canCurrentPlayerPlayNow()) {
+      await decisionMomentMenu("After resolving. You can play cards, then End Turn.");
+    }
   }
 
   function endTurnInternal(skipExtraQueue){
@@ -1193,9 +1383,7 @@
     endTurnInternal(false);
   }
 
-  // ----------------------------
   // New game
-  // ----------------------------
   function newGame(){
     const chosen = [...state.selected];
 
@@ -1222,7 +1410,6 @@
         oneHit: [],
         usedPlus1ThisTurn: false,
         ax: p0.x, ay: p0.y,
-        tx: p0.x, ty: p0.y,
         _forkMode: null,
       };
     });
@@ -1235,6 +1422,7 @@
       closetDeck: makeDeck(CLOSET),
       oneHitDeck: makeDeck(ONE_HIT_WONDERS),
       kalifStash: [],
+      hasPassedS4: false,
     };
 
     state.game.bedroomDeck.shuffle();
@@ -1248,9 +1436,7 @@
     startTurn();
   }
 
-  // ----------------------------
   // Drawing
-  // ----------------------------
   function drawChip(player){
     const r = 22;
 
@@ -1275,6 +1461,8 @@
   }
 
   function draw(){
+    resizeCanvasToDisplaySize();
+
     ctx.setTransform(1,0,0,1,0,0);
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -1315,9 +1503,7 @@
     }
   }
 
-  // ----------------------------
-  // UI refresh
-  // ----------------------------
+  // UI
   function refreshMenuStatus(){
     menuStatus.textContent = haveCoords()
       ? "Board mapped: YES. You can Play."
@@ -1334,9 +1520,12 @@
     const g = state.game;
     const p = currentPlayer();
 
+    // update roll button label to d6
+    btnRoll.textContent = "ROLL d6";
+
     turnInfo.textContent =
       `Player: ${p.name}\n` +
-      `Space: s${p.pos} (${SPACES[p.pos]})\n` +
+      `Space: s${p.pos} (${SPACE_TITLES[p.pos]})\n` +
       `Cash: $${p.cash}\n` +
       `One Hit Wonders: ${p.oneHit.length}\n` +
       `Bedroom cards: ${p.bedroom.length}\n` +
@@ -1362,9 +1551,7 @@
     }
   }
 
-  // ----------------------------
   // Player selection UI
-  // ----------------------------
   function buildPlayerPick(){
     playerPick.innerHTML = "";
     for(const name of ROSTER){
@@ -1388,9 +1575,7 @@
     }
   }
 
-  // ----------------------------
-  // Mapping events
-  // ----------------------------
+  // Mapping click handling
   function canvasToWorld(e){
     const rect = canvas.getBoundingClientRect();
     const px = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -1440,18 +1625,14 @@
     refreshMapUI();
   });
 
-  // ----------------------------
-  // Buttons / navigation
-  // ----------------------------
+  // Buttons
   btnMap.addEventListener("click", () => {
     state.phase = Phase.Mapping;
     state.mapIndex = COORDS.length;
     showMap();
   });
 
-  btnPlay.addEventListener("click", () => {
-    newGame();
-  });
+  btnPlay.addEventListener("click", () => newGame());
 
   btnBackMenu.addEventListener("click", () => {
     state.game = null;
@@ -1479,9 +1660,7 @@
     refreshPlayUI();
   });
 
-  // ----------------------------
   // Render loop
-  // ----------------------------
   let lastT = performance.now();
   function loop(t){
     const dt = (t - lastT) / 1000;
@@ -1491,13 +1670,13 @@
     requestAnimationFrame(loop);
   }
 
-  // ----------------------------
   // Init
-  // ----------------------------
   closeModal();
+  hideInfo();
   buildPlayerPick();
   state.phase = Phase.Menu;
   showMenu();
   refreshMenuStatus();
+  resizeCanvasToDisplaySize();
   requestAnimationFrame(loop);
 })();
